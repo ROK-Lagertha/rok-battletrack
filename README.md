@@ -1,19 +1,11 @@
-# ROK BattleTrack – OP-025 v1.1
+# ROK BattleTrack – OP-025 v1.2.2
 
-First integrated WebApp build.
+Hotfix for the BattleTrack hero image.
 
-## Apps Script files
-Upload/create these files in the same Apps Script project:
-- Code.gs
+Changed file:
 - Index.html
-- Styles.html
-- Scripts.html
 
-`Code.gs` contains the existing BattleTrack Backend API V1 plus the WebApp entry and a client bridge.
+Fix:
+- Uses Apps Script force-print templating for the Base64 image data URL so the URL is not contextually escaped before being placed into the img src attribute.
 
-## Behaviour
-- Opening the deployed WebApp URL shows the BattleTrack UI.
-- `?governorId=208886484` still returns the JSON API response.
-- The UI uses `google.script.run` to call `getPlayerData(governorId)`.
-
-No database schema assumptions were changed.
+All other v1.2.1 files are unchanged.

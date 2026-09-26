@@ -1,65 +1,90 @@
 <style>
 :root{
-  --bg:#07101d;--panel:#0d1929;--panel2:#111f32;--line:#26364c;
-  --gold:#d8ad5a;--gold2:#f0cf83;--text:#f3f5f8;--muted:#8f9bad;
-  --green:#5fd49a;--red:#ef7373;--blue:#75aef2;
+  --black:#030405;--navy:#07111d;--navy2:#0b1725;--panel:#0c1724;
+  --gold:#f0a51b;--gold-bright:#ffd36b;--gold-soft:#c57a0c;
+  --silver:#e6e8ea;--text:#f4f2ec;--muted:#8e99a7;
+  --line:rgba(240,165,27,.25);--green:#66d89c;--red:#ef7373;--blue:#78b6ff;
 }
 *{box-sizing:border-box}
-body{margin:0;min-height:100vh;background:
-radial-gradient(circle at 85% 0%,rgba(216,173,90,.10),transparent 28%),
-linear-gradient(180deg,#07101d,#091421 70%);color:var(--text);
-font-family:Inter,Segoe UI,Arial,sans-serif}
-.shell{width:min(1180px,calc(100% - 32px));margin:auto;padding:46px 0 80px}
-.hero{display:flex;justify-content:space-between;align-items:center;margin-bottom:28px}
-.hero h1{font-size:clamp(2.2rem,6vw,4.6rem);margin:3px 0 2px;letter-spacing:-.045em}
-.hero h1 span{color:var(--gold)}
-.hero p,.muted{color:var(--muted)}
-.kicker{color:var(--gold);font-size:.72rem;font-weight:800;letter-spacing:.18em}
-.crest{font-size:3.6rem;color:var(--gold);opacity:.8}
-.search-panel,.player-card,.panel,.stat{background:rgba(13,25,41,.88);border:1px solid var(--line);
-box-shadow:0 18px 50px rgba(0,0,0,.18)}
-.search-panel{padding:22px;border-radius:18px;margin-bottom:22px}
-.search-panel label{display:block;color:var(--gold2);font-size:.78rem;font-weight:800;letter-spacing:.12em;margin-bottom:10px}
-.search-row{display:flex;gap:10px}
-input{flex:1;min-width:0;background:#07111f;border:1px solid #34445b;color:white;padding:15px 16px;
-border-radius:10px;font-size:1rem;outline:none}
-input:focus{border-color:var(--gold)}
-button{border:0;border-radius:10px;padding:0 25px;background:linear-gradient(135deg,var(--gold2),var(--gold));
-color:#111827;font-weight:900;letter-spacing:.08em;cursor:pointer}
+html{background:var(--black)}
+body{
+  margin:0;min-height:100vh;color:var(--text);
+  font-family:Inter,Segoe UI,Arial,sans-serif;
+  background:
+    radial-gradient(circle at 50% 8%,rgba(238,150,18,.10),transparent 24rem),
+    linear-gradient(180deg,#020303 0%,#050a10 35%,#07111d 100%);
+}
+body:before{
+  content:"";position:fixed;inset:0;pointer-events:none;opacity:.28;
+  background-image:
+    linear-gradient(rgba(255,255,255,.018) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(255,255,255,.018) 1px,transparent 1px);
+  background-size:42px 42px;
+  mask-image:linear-gradient(to bottom,transparent,black 25%,black 80%,transparent);
+}
+.page-shell{width:min(1180px,calc(100% - 28px));margin:auto;padding-bottom:55px}
+.battletrack-hero{position:relative;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:18px 0 36px;overflow:hidden}
+.ambient{position:absolute;border-radius:50%;filter:blur(70px);pointer-events:none}
+.ambient-one{width:300px;height:300px;background:rgba(237,146,13,.13);top:120px;left:15%}
+.ambient-two{width:240px;height:240px;background:rgba(245,182,54,.09);top:260px;right:15%}
+.logo-wrap{position:relative;width:min(700px,88vw);z-index:1}
+.logo-wrap:after{content:"";position:absolute;inset:15% 16%;z-index:-1;border-radius:50%;box-shadow:0 0 110px 30px rgba(239,154,17,.18)}
+.battletrack-logo{display:block;width:100%;height:auto;filter:drop-shadow(0 20px 38px rgba(0,0,0,.72))}
+.hero-search{position:relative;z-index:2;width:min(650px,92vw);margin-top:-18px;text-align:center}
+.search-caption{margin-bottom:11px;color:var(--gold-bright);font-size:.72rem;font-weight:900;letter-spacing:.22em;text-shadow:0 0 18px rgba(240,165,27,.35)}
+.search-row{display:grid;grid-template-columns:1fr auto;gap:8px;padding:7px;border:1px solid rgba(240,165,27,.30);border-radius:14px;background:rgba(4,9,15,.88);box-shadow:0 10px 35px rgba(0,0,0,.35),0 0 30px rgba(240,165,27,.05)}
+input{min-width:0;border:0;outline:0;border-radius:9px;background:#08121e;color:white;padding:15px 16px;font-size:1rem;box-shadow:inset 0 0 0 1px rgba(255,255,255,.07)}
+input:focus{box-shadow:inset 0 0 0 1px rgba(255,199,78,.55),0 0 20px rgba(240,165,27,.08)}
+button{border:1px solid #ffc75a;border-radius:9px;padding:0 22px;min-height:49px;background:linear-gradient(180deg,#ffd675,#d88a0b);color:#171006;font-weight:950;letter-spacing:.08em;cursor:pointer;box-shadow:inset 0 1px rgba(255,255,255,.55),0 0 18px rgba(240,165,27,.16)}
+button:hover{filter:brightness(1.06);box-shadow:inset 0 1px rgba(255,255,255,.65),0 0 25px rgba(240,165,27,.28)}
 button:disabled{opacity:.55;cursor:wait}
-.message{min-height:20px;margin-top:10px;color:var(--muted);font-size:.9rem}
+.message{min-height:22px;margin-top:10px;color:var(--muted);font-size:.9rem}
 .message.error{color:var(--red)}
-.player-card{display:flex;justify-content:space-between;align-items:center;padding:25px;border-radius:18px}
-.player-card h2{font-size:2rem;margin:5px 0}
-.status-pill{padding:9px 13px;border:1px solid var(--line);border-radius:999px;font-size:.78rem;font-weight:900}
-.status-pill.pass{color:var(--green);border-color:rgba(95,212,154,.4)}
-.status-pill.not-met{color:var(--red);border-color:rgba(239,115,115,.4)}
-.status-pill.in-progress{color:var(--blue);border-color:rgba(117,174,242,.4)}
-.stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:12px 0}
-.stat{padding:18px;border-radius:14px}.stat span,.metric span{display:block;color:var(--muted);font-size:.78rem}
-.stat strong{display:block;font-size:1.55rem;margin-top:7px}
-.panel{padding:24px;border-radius:18px;margin-top:12px}
-.section-head{display:flex;justify-content:space-between;align-items:end;margin-bottom:18px}
-.section-head h3{margin:4px 0 0;font-size:1.35rem}
-.metric-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
-.metric{background:var(--panel2);border:1px solid var(--line);padding:16px;border-radius:12px}
+.hero-divider{display:flex;align-items:center;width:min(520px,80vw);gap:14px;margin-top:22px;color:var(--gold)}
+.hero-divider:before,.hero-divider:after{content:"";height:1px;flex:1;background:linear-gradient(90deg,transparent,var(--gold-soft),transparent)}
+.hero-divider span{font-size:.65rem;text-shadow:0 0 14px var(--gold)}
+#dashboard{padding-top:28px}
+.player-card,.panel,.stat{
+  background:linear-gradient(145deg,rgba(12,23,36,.96),rgba(6,13,22,.96));
+  border:1px solid var(--line);box-shadow:0 18px 50px rgba(0,0,0,.28),inset 0 1px rgba(255,255,255,.025)
+}
+.player-card{display:flex;justify-content:space-between;align-items:center;padding:25px 27px;border-radius:16px;position:relative;overflow:hidden}
+.player-card:before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:linear-gradient(var(--gold-bright),var(--gold-soft));box-shadow:0 0 18px var(--gold)}
+.player-card h2{font-family:Georgia,serif;font-size:2.2rem;margin:4px 0;color:#fff}
+.kicker{color:var(--gold-bright);font-size:.68rem;font-weight:900;letter-spacing:.18em}
+.muted{color:var(--muted)}
+.status-pill{padding:9px 14px;border:1px solid var(--line);border-radius:999px;font-size:.76rem;font-weight:900;letter-spacing:.05em}
+.status-pill.pass{color:var(--green);border-color:rgba(102,216,156,.38)}
+.status-pill.not-met{color:var(--red);border-color:rgba(239,115,115,.38)}
+.status-pill.in-progress{color:var(--blue);border-color:rgba(120,182,255,.38)}
+.stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:10px 0}
+.stat{padding:18px;border-radius:13px}.stat span,.metric span{display:block;color:var(--muted);font-size:.75rem;text-transform:uppercase;letter-spacing:.06em}
+.stat strong{display:block;font-size:1.5rem;margin-top:7px;color:var(--gold-bright)}
+.panel{padding:24px;border-radius:16px;margin-top:10px}
+.section-head{display:flex;justify-content:space-between;align-items:end;margin-bottom:18px;padding-bottom:13px;border-bottom:1px solid rgba(240,165,27,.13)}
+.section-head h3{font-family:Georgia,serif;margin:4px 0 0;font-size:1.45rem}
+.metric-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}
+.metric{background:rgba(10,21,34,.85);border:1px solid rgba(255,255,255,.065);padding:16px;border-radius:11px}
 .metric strong{display:block;margin-top:7px;font-size:1.25rem}
-.progress-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:14px}
-.progress-card{background:var(--panel2);border:1px solid var(--line);padding:15px;border-radius:12px}
-.progress-label{display:flex;justify-content:space-between;gap:10px;color:var(--muted);font-size:.8rem;margin-bottom:9px}
-.progress-label b{color:var(--text)}
-.bar{height:7px;background:#07111f;border-radius:999px;overflow:hidden}
-.bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--gold),var(--gold2));border-radius:999px}
-.history{display:grid;gap:9px}
-.history-row{display:grid;grid-template-columns:90px 1fr 150px 140px;gap:12px;align-items:center;
-background:var(--panel2);border:1px solid var(--line);padding:14px;border-radius:12px}
-.history-row .kvk{font-weight:900;color:var(--gold2)}
-.history-row .result{font-weight:800}
-.history-row .result.PASS{color:var(--green)}.history-row .result.NOT_MET{color:var(--red)}
-.history-row .result.IN_PROGRESS{color:var(--blue)}
+.progress-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-top:12px}
+.progress-card{background:rgba(10,21,34,.85);border:1px solid rgba(255,255,255,.065);padding:15px;border-radius:11px}
+.progress-label{display:flex;justify-content:space-between;gap:10px;color:var(--muted);font-size:.78rem;margin-bottom:9px}
+.progress-label b{color:var(--gold-bright)}
+.bar{height:7px;background:#03080e;border-radius:999px;overflow:hidden;box-shadow:inset 0 1px 3px #000}
+.bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,#b96a04,#ffca4c,#fff0a0);border-radius:999px;box-shadow:0 0 12px rgba(255,185,48,.55)}
+.history{display:grid;gap:8px}
+.history-row{display:grid;grid-template-columns:90px 1fr 150px 140px;gap:12px;align-items:center;background:rgba(10,21,34,.82);border:1px solid rgba(255,255,255,.06);padding:14px;border-radius:11px}
+.history-row:hover{border-color:rgba(240,165,27,.25)}
+.history-row .kvk{font-weight:900;color:var(--gold-bright)}
+.history-row .result{font-weight:900}.history-row .result.PASS{color:var(--green)}.history-row .result.NOT_MET{color:var(--red)}.history-row .result.IN_PROGRESS{color:var(--blue)}
+footer{text-align:center;color:#596575;font-size:.65rem;font-weight:800;letter-spacing:.17em;margin-top:35px}
 @media(max-width:760px){
- .shell{width:min(100% - 20px,1180px);padding-top:25px}.crest{display:none}
- .search-row{flex-direction:column}button{padding:15px}
+ .page-shell{width:min(100% - 18px,1180px)}
+ .battletrack-hero{min-height:auto;padding-top:6px;padding-bottom:28px}
+ .logo-wrap{width:min(520px,104vw);margin-left:-2vw;margin-right:-2vw}
+ .hero-search{margin-top:-8px;width:94vw}
+ .search-row{grid-template-columns:1fr}.search-caption{font-size:.66rem}
+ button{padding:14px}
  .player-card{align-items:flex-start;gap:15px;flex-direction:column}
  .stats-grid{grid-template-columns:repeat(2,1fr)}
  .metric-grid,.progress-grid{grid-template-columns:1fr}

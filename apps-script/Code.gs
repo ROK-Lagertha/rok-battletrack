@@ -54,11 +54,20 @@ function doGet(e) {
     return apiGet_(e);
   }
 
-  return HtmlService
-    .createTemplateFromFile('Index')
+  const template = HtmlService.createTemplateFromFile('Index');
+  template.battleTrackLogo = getBattleTrackLogo_();
+
+  return template
     .evaluate()
     .setTitle('ROK BattleTrack')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+}
+
+function getBattleTrackLogo_() {
+  const fileId = '1_w7tKO-lPqvjkkpSreOdEa_Hnc4JikjV';
+  const blob = DriveApp.getFileById(fileId).getBlob();
+  const base64 = Utilities.base64Encode(blob.getBytes());
+  return 'data:image/png;base64,' + base64;
 }
 
 

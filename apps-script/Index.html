@@ -6,25 +6,31 @@
   <?!= include_('Styles'); ?>
 </head>
 <body>
-  <div class="shell">
-    <header class="hero">
-      <div>
-        <div class="kicker">KINGDOM 3903 · OP-025</div>
-        <h1>ROK <span>BattleTrack</span></h1>
-        <p>Governor performance & KvK tracking</p>
-      </div>
-      <div class="crest">⚔</div>
-    </header>
+  <div class="page-shell">
+    <header class="battletrack-hero">
+      <div class="ambient ambient-one"></div>
+      <div class="ambient ambient-two"></div>
 
-    <section class="search-panel">
-      <label for="governorId">GOVERNOR ID</label>
-      <div class="search-row">
-        <input id="governorId" inputmode="numeric" autocomplete="off"
-               placeholder="e.g. 208886484">
-        <button id="searchBtn" onclick="searchGovernor()">SEARCH</button>
+      <div class="logo-wrap">
+        <img class="battletrack-logo"
+             src="<?!= battleTrackLogo ?>"
+             alt="ROK BattleTrack – Kingdom 3903">
       </div>
-      <div id="message" class="message"></div>
-    </section>
+
+      <section class="hero-search">
+        <div class="search-caption">ENTER YOUR GOVERNOR ID</div>
+        <div class="search-row">
+          <input id="governorId"
+                 inputmode="numeric"
+                 autocomplete="off"
+                 placeholder="Governor ID">
+          <button id="searchBtn" onclick="searchGovernor()">VIEW MY STATS</button>
+        </div>
+        <div id="message" class="message"></div>
+      </section>
+
+      <div class="hero-divider"><span>◆</span></div>
+    </header>
 
     <main id="dashboard" hidden>
       <section class="player-card">
@@ -76,7 +82,7 @@
         </div>
       </section>
 
-      <section class="panel">
+      <section class="panel history-panel">
         <div class="section-head">
           <div>
             <div class="kicker">BATTLE RECORD</div>
@@ -86,8 +92,9 @@
         <div id="history" class="history"></div>
       </section>
     </main>
-  </div>
 
+    <footer>ROK BATTLETRACK · KINGDOM 3903</footer>
+  </div>
   <?!= include_('Scripts'); ?>
 </body>
 </html>
