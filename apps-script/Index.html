@@ -84,7 +84,9 @@
           </div>
         </div>
 
-        <section id="dkpRankingCard" class="dkp-ranking-card" hidden>
+        <details id="dkpRankingCard" class="dkp-ranking-card ranking-collapsible" hidden>
+          <summary class="ranking-summary"><span>KINGDOM RANKING</span><span class="ranking-chevron" aria-hidden="true">⌄</span></summary>
+          <div class="ranking-expanded-content">
           <div class="dkp-rank-copy">
             <div class="ranking-head">
               <div class="kicker" id="rankingTitle">KINGDOM DKP RANKING</div>
@@ -96,12 +98,15 @@
               </div>
             </div>
             <div class="dkp-rank-line"><strong id="dkpRank">—</strong><span id="dkpTotal">of — Governors</span></div>
+            <div id="rankingPercentile" class="dkp-rank-percentile">—</div>
           </div>
           <div class="dkp-score">
             <span id="rankingValueLabel">YOUR DKP</span>
             <strong id="dkpScore">—</strong>
           </div>
-        </section>
+          <div id="rankingNeighborhood" class="ranking-neighborhood" aria-label="Ranking neighborhood"></div>
+          </div>
+        </details>
 
       </section>
 

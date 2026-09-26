@@ -1,5 +1,21 @@
 # Changelog
 
+## v1.4.4.1 — OP-038 Collapsible Ranking Panel
+- Added a mobile-friendly collapsible Kingdom Ranking panel.
+- Ranking is collapsed by default and expands on demand with a compact header and chevron.
+- Preserved the existing gold/dark gradient styling.
+- Expanded panel retains DKP, KPR, KP and KILLS tabs, personal rank, Top-% position and Ranking Neighborhood.
+- Built without changing the stable ranking JavaScript logic.
+
+## v1.4.3 – OP-033 Ranking Neighborhood
+- Added dynamic 3-above / current player / 3-below ranking neighborhood for DKP, KPR, KP and KILLS.
+- Neighborhood follows the active ranking tab and highlights the current governor.
+
+## v1.4.2 — OP-032 Personal Rank + Top-% Position
+- Added a dynamic “Ahead of X% of Governors” indicator to the Kingdom Ranking card.
+- The percentage updates with DKP, KPR, KP and KILLS.
+- Ties are handled from the underlying score population: only governors with a strictly lower score count as being behind the player.
+
 ## v1.4.1.3 — Stable
 - OP-034 completed: interactive Kingdom Ranking category switcher.
 - Final category order: **DKP | KPR | KP | KILLS**.

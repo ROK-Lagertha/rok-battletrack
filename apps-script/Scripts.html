@@ -142,11 +142,35 @@ function setRankingMetric(metric){
   $('rankingValueLabel').textContent='YOUR '+label;
   $('dkpRank').textContent='#'+num(item.rank);
   $('dkpTotal').textContent='of '+num(item.total)+' Governors';
+  const percentile=$('rankingPercentile');
+  if(percentile){
+    const ahead=item.aheadPercent!=null
+      ? Number(item.aheadPercent)
+      : (item.total ? Math.max(0,((item.total-item.rank)/item.total)*100) : 0);
+    percentile.textContent='Ahead of '+ahead.toFixed(1)+'% of Governors';
+  }
   $('dkpScore').textContent=metric==='kpr' ? (Number(item.value||0)*100).toFixed(2)+'%' : num(item.value);
+  renderRankingNeighborhood(item.neighborhood||[],metric);
   document.querySelectorAll('.ranking-tab').forEach(btn=>{
     btn.classList.toggle('active',btn.dataset.ranking===metric);
     btn.disabled=!currentRanking?.categories?.[btn.dataset.ranking];
   });
+}
+
+function renderRankingNeighborhood(rows,metric){
+  const host=$('rankingNeighborhood');
+  if(!host) return;
+  if(!rows.length){ host.innerHTML=''; host.hidden=true; return; }
+  host.hidden=false;
+  host.innerHTML=rows.map(row=>{
+    const value=metric==='kpr' ? (Number(row.value||0)*100).toFixed(2)+'%' : num(row.value);
+    const name=esc(row.governorName||('Governor '+row.governorId));
+    return `<div class="ranking-neighbor${row.isCurrent?' is-current':''}">
+      <span class="neighbor-rank">#${num(row.rank)}</span>
+      <span class="neighbor-name">${name}${row.isCurrent?' <b>YOU</b>':''}</span>
+      <span class="neighbor-value">${value}</span>
+    </div>`;
+  }).join('');
 }
 
 document.addEventListener('click',e=>{

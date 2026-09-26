@@ -817,7 +817,7 @@ function buildCategoryRankings_(results) {
     const kpr = startPower > 0 ? kp / startPower : 0;
 
     if (!byKvk[kvkId]) byKvk[kvkId] = [];
-    byKvk[kvkId].push({ governorId, dkp, kp, kills, kpr });
+    byKvk[kvkId].push({ governorId, governorName: String(row['Governor Name'] || '').trim() || ('Governor '+governorId), dkp, kp, kills, kpr });
   });
 
   const rankings = {};
@@ -827,24 +827,43 @@ function buildCategoryRankings_(results) {
     const players = byKvk[kvkId];
     const metricRanks = {};
 
+    const metricOrders = {};
     metrics.forEach(metric => {
-      const scores = players.map(p => p[metric]).sort((a, b) => b - a);
+      const ordered = players.slice().sort((a, b) => {
+        const diff = b[metric] - a[metric];
+        return diff !== 0 ? diff : String(a.governorId).localeCompare(String(b.governorId));
+      });
       const rankByScore = {};
-      scores.forEach((score, index) => {
-        const key = String(score);
+      ordered.forEach((player, index) => {
+        const key = String(player[metric]);
         if (rankByScore[key] == null) rankByScore[key] = index + 1;
       });
       metricRanks[metric] = rankByScore;
+      metricOrders[metric] = ordered;
     });
 
     rankings[kvkId] = {};
     players.forEach(player => {
       const categories = {};
       metrics.forEach(metric => {
+        const lowerCount = players.filter(other => other[metric] < player[metric]).length;
+        const ordered = metricOrders[metric];
+        const playerIndex = ordered.findIndex(p => p.governorId === player.governorId);
+        const neighborhood = ordered
+          .slice(Math.max(0, playerIndex - 3), Math.min(ordered.length, playerIndex + 4))
+          .map(p => ({
+            governorId: p.governorId,
+            governorName: p.governorName,
+            value: p[metric],
+            rank: metricRanks[metric][String(p[metric])],
+            isCurrent: p.governorId === player.governorId
+          }));
         categories[metric] = {
           value: player[metric],
           rank: metricRanks[metric][String(player[metric])],
-          total: players.length
+          total: players.length,
+          aheadPercent: players.length ? (lowerCount / players.length) * 100 : 0,
+          neighborhood: neighborhood
         };
       });
       // Keep the proven v1.4.0 DKP fields for backwards compatibility,
