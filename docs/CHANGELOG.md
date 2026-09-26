@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.3.1
+- UI hotfix: Overall Progress now reserves the same requirement-label row as the other progress cards, keeping all three progress bars vertically aligned.
+
+## v1.3.0
+- OP-026: Season/story mapping sourced from the KvKs sheet.
+- OP-027: Governor profile now displays readable First Seen season/story.
+- OP-028: Current Season display replaces duplicate KvK naming.
+- OP-029: Interactive expandable KvK Battle Archive with detailed historical stats and progress.
+
 ## v1.2.2
 - Fixed Base64 hero image rendering in Apps Script HTML templates by using force-print output for the image data URL.
 

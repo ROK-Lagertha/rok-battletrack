@@ -45,7 +45,7 @@ function showMessage(text,isError=false){
 function renderDashboard(data){
   const g=data.governor||{}, s=data.summary||{}, k=data.currentKvk;
   $('playerName').textContent=g.name||'Unknown Governor';
-  $('playerMeta').textContent=`ID ${g.id||'—'} · Kingdom ${g.kingdom||'—'} · First seen ${g.firstSeenKvk||'—'}`;
+  $('playerMeta').textContent=`ID ${g.id||'—'} · Kingdom ${g.kingdom||'—'} · First seen: ${g.firstSeenSeason||g.firstSeenKvk||'—'}`;
   $('trackedKvks').textContent=s.trackedKvks??0;
   $('passedKvks').textContent=s.passedKvks??0;
 
@@ -57,9 +57,9 @@ function renderDashboard(data){
     $('currentPanel').hidden=true;
   }else{
     $('currentPanel').hidden=false;
-    $('currentKvkNo').textContent=k.number!=null?`#${k.number}`:'—';
+    $('currentKvkNo').textContent=k.seasonName||'—';
     $('classification').textContent=(k.classification||'—').replace('_',' ');
-    $('seasonTitle').textContent=`KvK ${k.number??'—'} · ${k.seasonName||'Season'}`;
+    $('seasonTitle').textContent=k.seasonName||`KvK ${k.number??'—'}`;
     setStatus(k.status);
     const p=k.performance||{}, pow=k.power||{}, prog=k.progress||{};
     $('killPoints').textContent=num(p.killPoints);
@@ -97,16 +97,67 @@ function renderHistory(items){
     root.innerHTML='<div class="muted">No KvK history available.</div>';
     return;
   }
+
   [...items].reverse().forEach(k=>{
-    const row=document.createElement('div');
-    row.className='history-row';
-    row.innerHTML=`
+    const item=document.createElement('article');
+    item.className='history-item';
+
+    const summary=document.createElement('button');
+    summary.type='button';
+    summary.className='history-row history-toggle';
+    summary.setAttribute('aria-expanded','false');
+    summary.innerHTML=`
       <div class="kvk">KvK ${esc(k.number??'—')}</div>
-      <div><strong>${esc(k.seasonName||'Season')}</strong><div class="muted">${esc((k.classification||'—').replace('_',' '))}</div></div>
-      <div class="result ${esc(k.status||'')}">${esc((k.status||'—').replace('_',' '))}</div>
-      <div>${num(k.performance?.deads)} deads</div>`;
-    root.appendChild(row);
+      <div><strong>${esc(k.seasonName||'Season')}</strong><div class="muted">${esc((k.classification||'—').replaceAll('_',' '))}</div></div>
+      <div class="result ${esc(k.status||'')}">${esc((k.status||'—').replaceAll('_',' '))}</div>
+      <div class="history-deads">${num(k.performance?.deads)} deads <span class="history-chevron">⌄</span></div>`;
+
+    const details=document.createElement('div');
+    details.className='history-details';
+    details.hidden=true;
+
+    const p=k.performance||{}, pow=k.power||{}, prog=k.progress||{}, req=k.requirements||{};
+    details.innerHTML=`
+      <div class="history-detail-grid">
+        ${detailCard('Kill Points',num(p.killPoints))}
+        ${detailCard('T4 Kills',num(p.t4Kills))}
+        ${detailCard('T5 Kills',num(p.t5Kills))}
+        ${detailCard('Deads',num(p.deads))}
+        ${detailCard('Start Power',num(pow.start))}
+        ${detailCard('Power Change',signed(pow.change))}
+      </div>
+      <div class="history-progress-grid">
+        ${historyProgress('Kills Requirement',prog.kills,req.kills)}
+        ${historyProgress('Deads Requirement',prog.deads,req.deads)}
+        ${historyProgress('Overall Progress',prog.overall,null)}
+      </div>`;
+
+    summary.addEventListener('click',()=>{
+      const open=summary.getAttribute('aria-expanded')==='true';
+      summary.setAttribute('aria-expanded',String(!open));
+      details.hidden=open;
+      item.classList.toggle('open',!open);
+    });
+
+    item.appendChild(summary);
+    item.appendChild(details);
+    root.appendChild(item);
   });
+}
+
+function detailCard(label,value){
+  return `<div class="history-detail-card"><span>${esc(label)}</span><strong>${esc(value)}</strong></div>`;
+}
+
+function historyProgress(label,value,requirement){
+  const pct=value==null?null:Math.round(Number(value)*100)/100;
+  const width=pct==null?0:Math.max(0,Math.min(100,pct));
+  const req=requirement==null?'<small aria-hidden="true">&nbsp;</small>':`<small>Requirement: ${num(requirement)}</small>`;
+  return `<div class="history-progress">
+    <div><span>${esc(label)}</span><strong>${pct==null?'N/A':pct+'%'}</strong></div>
+    ${req}
+    <div class="progress-track"><i style="width:${width}%"></i></div>
+  </div>`;
 }
 
 function num(v){

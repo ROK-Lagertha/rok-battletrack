@@ -90,4 +90,31 @@ footer{text-align:center;color:#596575;font-size:.65rem;font-weight:800;letter-s
  .metric-grid,.progress-grid{grid-template-columns:1fr}
  .history-row{grid-template-columns:70px 1fr}.history-row>:nth-child(3),.history-row>:nth-child(4){grid-column:2}
 }
+
+.current-season-stat strong{font-size:clamp(.92rem,1.7vw,1.25rem);line-height:1.2}
+.history-item{border:1px solid #17283a;border-radius:12px;background:rgba(8,19,31,.56);overflow:hidden}
+.history-item+.history-item{margin-top:9px}
+.history-item .history-row{border:0;border-radius:0;background:transparent;width:100%;margin:0;text-align:left;color:inherit;font:inherit;cursor:pointer}
+.history-item .history-row:hover{background:rgba(255,184,0,.035)}
+.history-item.open{border-color:rgba(255,184,0,.34);box-shadow:0 0 22px rgba(255,166,0,.05)}
+.history-toggle:focus-visible{outline:2px solid #ffbd2e;outline-offset:-2px}
+.history-chevron{display:inline-block;margin-left:10px;color:#ffbd2e;font-size:1.1rem;transition:transform .2s ease}
+.history-item.open .history-chevron{transform:rotate(180deg)}
+.history-details{border-top:1px solid rgba(255,184,0,.15);padding:18px 16px 20px}
+.history-detail-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}
+.history-detail-card{padding:13px 14px;border:1px solid #17283a;border-radius:10px;background:#091624}
+.history-detail-card span{display:block;color:#88a9d5;text-transform:uppercase;letter-spacing:.06em;font-size:.68rem;margin-bottom:6px}
+.history-detail-card strong{font-size:1rem}
+.history-progress-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-top:10px}
+.history-progress{padding:12px 14px;border:1px solid #17283a;border-radius:10px;background:#091624}
+.history-progress>div:first-child{display:flex;justify-content:space-between;gap:12px;color:#88a9d5;font-size:.72rem}
+.history-progress strong{color:#ffcf4d}
+.history-progress small{display:block;color:#65778b;margin:5px 0 8px}
+.history-progress .progress-track{height:6px;background:#020912;border-radius:99px;overflow:hidden}
+.history-progress .progress-track i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,#d98200,#ffc12c,#fff1a3)}
+
+@media(max-width:760px){
+ .history-detail-grid,.history-progress-grid{grid-template-columns:1fr}
+ .history-deads{white-space:nowrap}
+}
 </style>

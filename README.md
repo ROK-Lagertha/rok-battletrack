@@ -1,11 +1,25 @@
-# ROK BattleTrack – OP-025 v1.2.2
+# ROK BattleTrack – v1.3.1
 
-Hotfix for the BattleTrack hero image.
+Governor Battle Profile update for Kingdom 3903.
 
-Changed file:
+## Changed Apps Script files
+- Code.gs
 - Index.html
+- Scripts.html
+- Styles.html
 
-Fix:
-- Uses Apps Script force-print templating for the Base64 image data URL so the URL is not contextually escaped before being placed into the img src attribute.
+## Database update
+The existing `KvKs` → `Season Name` values are used as the single source of truth:
+- KvK 2 → Season 2
+- KvK 3 → Season 3 - King of All Britain
+- KvK 4 → Season 4 - Heroic Anthem
 
-All other v1.2.1 files are unchanged.
+## v1.3 features
+- Current Season shows the readable season/story name.
+- First Seen shows the readable season/story name.
+- Duplicate KvK naming in the current panel is removed.
+- KvK History is now an interactive Battle Archive.
+- Each historical KvK can be expanded to show battle stats, power data and requirement progress.
+
+## v1.3.1 hotfix
+- Aligns the Overall Progress bar vertically with Kills and Deads progress bars.

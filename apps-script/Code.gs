@@ -478,6 +478,11 @@ function getPlayerData_(governorId) {
       firstSeenKvk:
         governor['First Seen KvK'] || null,
 
+      firstSeenSeason:
+        (
+          kvkMap[String(governor['First Seen KvK'] || '').trim()] || {}
+        )['Season Name'] || governor['First Seen KvK'] || null,
+
       lastSeenKvk:
         governor['Last Seen KvK'] || null
 
