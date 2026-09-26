@@ -1,0 +1,122 @@
+<script>
+const $ = id => document.getElementById(id);
+
+function searchGovernor(){
+  const id = $('governorId').value.trim();
+  const btn = $('searchBtn');
+  $('message').className='message';
+  $('dashboard').hidden=true;
+
+  if(!/^\d+$/.test(id)){
+    showMessage('Please enter a valid numeric Governor ID.', true);
+    return;
+  }
+
+  btn.disabled=true;
+  btn.textContent='SEARCHING…';
+  showMessage('Searching BattleTrack…');
+
+  google.script.run
+    .withSuccessHandler(data=>{
+      btn.disabled=false; btn.textContent='SEARCH';
+      if(!data || !data.success){
+        showMessage(data?.error?.message || 'Governor could not be loaded.', true);
+        return;
+      }
+      showMessage('');
+      renderDashboard(data);
+    })
+    .withFailureHandler(err=>{
+      btn.disabled=false; btn.textContent='SEARCH';
+      showMessage(err?.message || 'BattleTrack request failed.', true);
+    })
+    .getPlayerData(id);
+}
+
+$('governorId').addEventListener('keydown', e=>{
+  if(e.key==='Enter') searchGovernor();
+});
+
+function showMessage(text,isError=false){
+  $('message').textContent=text;
+  $('message').className='message'+(isError?' error':'');
+}
+
+function renderDashboard(data){
+  const g=data.governor||{}, s=data.summary||{}, k=data.currentKvk;
+  $('playerName').textContent=g.name||'Unknown Governor';
+  $('playerMeta').textContent=`ID ${g.id||'—'} · Kingdom ${g.kingdom||'—'} · First seen ${g.firstSeenKvk||'—'}`;
+  $('trackedKvks').textContent=s.trackedKvks??0;
+  $('passedKvks').textContent=s.passedKvks??0;
+
+  if(!k){
+    $('currentStatus').textContent='NO KVK DATA';
+    $('currentStatus').className='status-pill';
+    $('currentKvkNo').textContent='—';
+    $('classification').textContent='—';
+    $('currentPanel').hidden=true;
+  }else{
+    $('currentPanel').hidden=false;
+    $('currentKvkNo').textContent=k.number!=null?`#${k.number}`:'—';
+    $('classification').textContent=(k.classification||'—').replace('_',' ');
+    $('seasonTitle').textContent=`KvK ${k.number??'—'} · ${k.seasonName||'Season'}`;
+    setStatus(k.status);
+    const p=k.performance||{}, pow=k.power||{}, prog=k.progress||{};
+    $('killPoints').textContent=num(p.killPoints);
+    $('t4Kills').textContent=num(p.t4Kills);
+    $('t5Kills').textContent=num(p.t5Kills);
+    $('deads').textContent=num(p.deads);
+    $('startPower').textContent=num(pow.start);
+    $('powerChange').textContent=signed(pow.change);
+    setProgress('kill',prog.kills);
+    setProgress('dead',prog.deads);
+    setProgress('overall',prog.overall);
+  }
+
+  renderHistory(data.history||[]);
+  $('dashboard').hidden=false;
+}
+
+function setStatus(status){
+  $('currentStatus').textContent=(status||'—').replace('_',' ');
+  $('currentStatus').className='status-pill '+String(status||'').toLowerCase().replaceAll('_','-');
+}
+
+function setProgress(prefix,value){
+  const label=$(prefix+'Pct'), bar=$(prefix+'Bar');
+  if(value==null){ label.textContent='N/A'; bar.style.width='0%'; return; }
+  const pct=Math.round(Number(value)*100)/100;
+  label.textContent=pct+'%';
+  bar.style.width=Math.max(0,Math.min(100,pct))+'%';
+}
+
+function renderHistory(items){
+  const root=$('history');
+  root.innerHTML='';
+  if(!items.length){
+    root.innerHTML='<div class="muted">No KvK history available.</div>';
+    return;
+  }
+  [...items].reverse().forEach(k=>{
+    const row=document.createElement('div');
+    row.className='history-row';
+    row.innerHTML=`
+      <div class="kvk">KvK ${esc(k.number??'—')}</div>
+      <div><strong>${esc(k.seasonName||'Season')}</strong><div class="muted">${esc((k.classification||'—').replace('_',' '))}</div></div>
+      <div class="result ${esc(k.status||'')}">${esc((k.status||'—').replace('_',' '))}</div>
+      <div>${num(k.performance?.deads)} deads</div>`;
+    root.appendChild(row);
+  });
+}
+
+function num(v){
+  return v==null?'—':new Intl.NumberFormat('en-US').format(Number(v));
+}
+function signed(v){
+  if(v==null)return '—';
+  const n=Number(v); return (n>0?'+':'')+num(n);
+}
+function esc(v){
+  return String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+</script>

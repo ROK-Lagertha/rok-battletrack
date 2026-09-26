@@ -1,0 +1,17 @@
+# Secrets / local configuration
+.env
+.env.*
+secrets.*
+credentials.*
+*.key
+
+# OS / editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Temporary / backup files
+*.tmp
+*.bak
+*~

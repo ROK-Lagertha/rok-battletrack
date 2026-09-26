@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <?!= include_('Styles'); ?>
+</head>
+<body>
+  <div class="shell">
+    <header class="hero">
+      <div>
+        <div class="kicker">KINGDOM 3903 · OP-025</div>
+        <h1>ROK <span>BattleTrack</span></h1>
+        <p>Governor performance & KvK tracking</p>
+      </div>
+      <div class="crest">⚔</div>
+    </header>
+
+    <section class="search-panel">
+      <label for="governorId">GOVERNOR ID</label>
+      <div class="search-row">
+        <input id="governorId" inputmode="numeric" autocomplete="off"
+               placeholder="e.g. 208886484">
+        <button id="searchBtn" onclick="searchGovernor()">SEARCH</button>
+      </div>
+      <div id="message" class="message"></div>
+    </section>
+
+    <main id="dashboard" hidden>
+      <section class="player-card">
+        <div>
+          <div class="kicker">GOVERNOR</div>
+          <h2 id="playerName">—</h2>
+          <div id="playerMeta" class="muted">—</div>
+        </div>
+        <div id="currentStatus" class="status-pill">—</div>
+      </section>
+
+      <section class="stats-grid">
+        <article class="stat"><span>Tracked KvKs</span><strong id="trackedKvks">0</strong></article>
+        <article class="stat"><span>Passed KvKs</span><strong id="passedKvks">0</strong></article>
+        <article class="stat"><span>Current KvK</span><strong id="currentKvkNo">—</strong></article>
+        <article class="stat"><span>Classification</span><strong id="classification">—</strong></article>
+      </section>
+
+      <section id="currentPanel" class="panel">
+        <div class="section-head">
+          <div>
+            <div class="kicker">CURRENT / LATEST</div>
+            <h3 id="seasonTitle">KvK Performance</h3>
+          </div>
+        </div>
+
+        <div class="metric-grid">
+          <article class="metric"><span>Kill Points</span><strong id="killPoints">—</strong></article>
+          <article class="metric"><span>T4 Kills</span><strong id="t4Kills">—</strong></article>
+          <article class="metric"><span>T5 Kills</span><strong id="t5Kills">—</strong></article>
+          <article class="metric"><span>Deads</span><strong id="deads">—</strong></article>
+          <article class="metric"><span>Start Power</span><strong id="startPower">—</strong></article>
+          <article class="metric"><span>Power Change</span><strong id="powerChange">—</strong></article>
+        </div>
+
+        <div class="progress-grid">
+          <div class="progress-card">
+            <div class="progress-label"><span>Kills Requirement</span><b id="killPct">—</b></div>
+            <div class="bar"><i id="killBar"></i></div>
+          </div>
+          <div class="progress-card">
+            <div class="progress-label"><span>Deads Requirement</span><b id="deadPct">—</b></div>
+            <div class="bar"><i id="deadBar"></i></div>
+          </div>
+          <div class="progress-card">
+            <div class="progress-label"><span>Overall Progress</span><b id="overallPct">—</b></div>
+            <div class="bar"><i id="overallBar"></i></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="section-head">
+          <div>
+            <div class="kicker">BATTLE RECORD</div>
+            <h3>KvK History</h3>
+          </div>
+        </div>
+        <div id="history" class="history"></div>
+      </section>
+    </main>
+  </div>
+
+  <?!= include_('Scripts'); ?>
+</body>
+</html>
