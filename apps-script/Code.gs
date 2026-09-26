@@ -14,7 +14,7 @@
 
 const BT = {
 
-  VERSION: '1.0',
+  VERSION: '1.4.0',
 
   KINGDOM: 3903,
 
@@ -398,6 +398,15 @@ function getPlayerData_(governorId) {
 
 
   /*
+   * DKP Kingdom Ranking je KvK erstellen.
+   * Alle Governor aus KvK Results nehmen teil.
+   * DKP = Deads x10 + T4 x5 + T5 x15.
+   * Gleicher DKP = gleicher Rang; Rang = 1 + Anzahl mit höherem DKP.
+   */
+  const categoryRankings = buildCategoryRankings_(results);
+
+
+  /*
    * Historie erstellen
    */
   const history =
@@ -410,11 +419,19 @@ function getPlayerData_(governorId) {
             row['KvK ID'] || ''
           ).trim();
 
+        const ranking =
+          categoryRankings[kvkId] &&
+          categoryRankings[kvkId][governorId]
+            ? categoryRankings[kvkId][governorId]
+            : null;
+
         return buildKvkPayload_(
 
           row,
 
-          kvkMap[kvkId]
+          kvkMap[kvkId],
+
+          ranking
 
         );
 
@@ -515,7 +532,7 @@ function getPlayerData_(governorId) {
  * ============================================================
  */
 
-function buildKvkPayload_(row, kvk) {
+function buildKvkPayload_(row, kvk, ranking) {
 
   kvk = kvk || {};
 
@@ -734,6 +751,9 @@ function buildKvkPayload_(row, kvk) {
     },
 
 
+    ranking: ranking || null,
+
+
     performance: {
 
       killPoints:
@@ -770,6 +790,75 @@ function buildKvkPayload_(row, kvk) {
 
   };
 
+}
+
+
+/**
+ * ============================================================
+ * KINGDOM RANKING BY CATEGORY
+ * ============================================================
+ */
+function buildCategoryRankings_(results) {
+
+  const byKvk = {};
+
+  results.forEach(row => {
+    const kvkId = String(row['KvK ID'] || '').trim();
+    const governorId = normalizeId_(row['Governor ID']);
+    if (!kvkId || !governorId) return;
+
+    const deads = Number(row['KvK Deads']) || 0;
+    const t4 = Number(row['KvK T4 Kills']) || 0;
+    const t5 = Number(row['KvK T5 Kills']) || 0;
+    const kp = Number(row['KvK Kill Points']) || 0;
+    const startPower = Number(row['Start Power']) || 0;
+    const kills = t4 + t5;
+    const dkp = (deads * 10) + (t4 * 5) + (t5 * 15);
+    const kpr = startPower > 0 ? kp / startPower : 0;
+
+    if (!byKvk[kvkId]) byKvk[kvkId] = [];
+    byKvk[kvkId].push({ governorId, dkp, kp, kills, kpr });
+  });
+
+  const rankings = {};
+  const metrics = ['dkp', 'kp', 'kills', 'kpr'];
+
+  Object.keys(byKvk).forEach(kvkId => {
+    const players = byKvk[kvkId];
+    const metricRanks = {};
+
+    metrics.forEach(metric => {
+      const scores = players.map(p => p[metric]).sort((a, b) => b - a);
+      const rankByScore = {};
+      scores.forEach((score, index) => {
+        const key = String(score);
+        if (rankByScore[key] == null) rankByScore[key] = index + 1;
+      });
+      metricRanks[metric] = rankByScore;
+    });
+
+    rankings[kvkId] = {};
+    players.forEach(player => {
+      const categories = {};
+      metrics.forEach(metric => {
+        categories[metric] = {
+          value: player[metric],
+          rank: metricRanks[metric][String(player[metric])],
+          total: players.length
+        };
+      });
+      // Keep the proven v1.4.0 DKP fields for backwards compatibility,
+      // while exposing all category rankings for the v1.4.1 switcher.
+      rankings[kvkId][player.governorId] = {
+        dkp: categories.dkp.value,
+        rank: categories.dkp.rank,
+        total: categories.dkp.total,
+        categories: categories
+      };
+    });
+  });
+
+  return rankings;
 }
 
 

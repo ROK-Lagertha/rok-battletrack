@@ -69,17 +69,40 @@
         <div class="progress-grid">
           <div class="progress-card">
             <div class="progress-label"><span>Kills Requirement</span><b id="killPct">—</b></div>
+            <div id="killRequirementDetail" class="requirement-detail">—</div>
             <div class="bar"><i id="killBar"></i></div>
           </div>
           <div class="progress-card">
             <div class="progress-label"><span>Deads Requirement</span><b id="deadPct">—</b></div>
+            <div id="deadRequirementDetail" class="requirement-detail">—</div>
             <div class="bar"><i id="deadBar"></i></div>
           </div>
           <div class="progress-card">
             <div class="progress-label"><span>Overall Progress</span><b id="overallPct">—</b></div>
+            <div class="requirement-detail requirement-detail-placeholder" aria-hidden="true"><strong>&nbsp;</strong><span>&nbsp;</span></div>
             <div class="bar"><i id="overallBar"></i></div>
           </div>
         </div>
+
+        <section id="dkpRankingCard" class="dkp-ranking-card" hidden>
+          <div class="dkp-rank-copy">
+            <div class="ranking-head">
+              <div class="kicker" id="rankingTitle">KINGDOM DKP RANKING</div>
+              <div class="ranking-tabs" role="group" aria-label="Ranking category">
+                <button type="button" class="ranking-tab active" data-ranking="dkp">DKP</button>
+                <button type="button" class="ranking-tab" data-ranking="kpr">KPR</button>
+                <button type="button" class="ranking-tab" data-ranking="kp">KP</button>
+                <button type="button" class="ranking-tab" data-ranking="kills">KILLS</button>
+              </div>
+            </div>
+            <div class="dkp-rank-line"><strong id="dkpRank">—</strong><span id="dkpTotal">of — Governors</span></div>
+          </div>
+          <div class="dkp-score">
+            <span id="rankingValueLabel">YOUR DKP</span>
+            <strong id="dkpScore">—</strong>
+          </div>
+        </section>
+
       </section>
 
       <section class="panel history-panel">

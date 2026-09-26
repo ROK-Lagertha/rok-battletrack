@@ -1,24 +1,33 @@
 # Changelog
 
-## v1.3.1
-- UI hotfix: Overall Progress now reserves the same requirement-label row as the other progress cards, keeping all three progress bars vertically aligned.
+## v1.4.1.3 — Stable
+- OP-034 completed: interactive Kingdom Ranking category switcher.
+- Final category order: **DKP | KPR | KP | KILLS**.
+- KPR is displayed as a percentage while preserving the underlying ranking calculation.
+- Current Season information hierarchy changed to **Stats → Requirements → Kingdom Ranking**.
+- Ranking changes instantly without reloading the governor profile.
 
-## v1.3.0
-- OP-026: Season/story mapping sourced from the KvKs sheet.
-- OP-027: Governor profile now displays readable First Seen season/story.
-- OP-028: Current Season display replaces duplicate KvK naming.
-- OP-029: Interactive expandable KvK Battle Archive with detailed historical stats and progress.
+## v1.4.1.2
+- Ranking switcher compatibility hotfix.
+- Preserved v1.4.0 DKP payload fields as fallback.
+- Ranking tabs can be restored dynamically if older cached card markup is present.
 
-## v1.2.2
-- Fixed Base64 hero image rendering in Apps Script HTML templates by using force-print output for the image data URL.
+## v1.4.1
+- OP-034: interactive ranking switcher introduced.
+- Categories: DKP, KP, KILLS and KPR.
+- KILLS = T4 + T5; KPR = KvK Kill Points / Start Power.
+- Equal values share the same rank.
 
-## v1.2.1
-- Fixed broken BattleTrack hero image by explicitly using the PNG MIME type for the embedded Drive image.
+## v1.4.0
+- OP-031: Kingdom DKP Ranking added to Current Season.
+- DKP calculated dynamically from KvK Results.
+- Formula: Deads × 10 + T4 × 5 + T5 × 15.
+- All governors in each KvK Results population are ranked.
+- Equal DKP values share the same rank.
+- Ranking payload prepared per KvK for later Top-% and ranking-neighborhood features.
 
-## v1.2
-- Added BattleTrack Kingdom 3903 keyvisual from Drive.
-- Rebuilt landing/hero layout around the artwork.
-- New black/navy/gold glowing visual language.
-- Removed OP-025 from public UI.
-- Restyled search, player profile, metrics, progress and KvK history.
-- Preserved v1.1 backend/API logic.
+## v1.3.2
+- Battle Archive single-open accordion.
+- Last 3 KvKs shown by default; older KvKs can be expanded.
+- Requirement achieved/target and remaining/completed display.
+- Overall Progress alignment hotfix.

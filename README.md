@@ -1,25 +1,18 @@
-# ROK BattleTrack – v1.3.1
+# ROK BattleTrack – Kingdom 3903
 
-Governor Battle Profile update for Kingdom 3903.
+Current stable release: **v1.4.1.3**
 
-## Changed Apps Script files
-- Code.gs
-- Index.html
-- Scripts.html
-- Styles.html
+ROK BattleTrack is the Kingdom 3903 governor performance dashboard built with Google Apps Script and Google Sheets.
 
-## Database update
-The existing `KvKs` → `Season Name` values are used as the single source of truth:
-- KvK 2 → Season 2
-- KvK 3 → Season 3 - King of All Britain
-- KvK 4 → Season 4 - Heroic Anthem
+### Current ranking module
+- Interactive categories: **DKP | KPR | KP | KILLS**
+- Ranking updates without reloading the governor profile.
+- **KPR** is displayed as a percentage.
+- **KILLS** uses T4 + T5 kills.
+- All governors in the selected KvK Results population participate; equal values share the same rank.
+- Current Season information order: **Stats → Requirements → Kingdom Ranking**.
 
-## v1.3 features
-- Current Season shows the readable season/story name.
-- First Seen shows the readable season/story name.
-- Duplicate KvK naming in the current panel is removed.
-- KvK History is now an interactive Battle Archive.
-- Each historical KvK can be expanded to show battle stats, power data and requirement progress.
+### DKP formula
+`(Deads × 10) + (T4 Kills × 5) + (T5 Kills × 15)`
 
-## v1.3.1 hotfix
-- Aligns the Overall Progress bar vertically with Kills and Deads progress bars.
+Apps Script source files are in `apps-script/`.
