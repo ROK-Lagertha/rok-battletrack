@@ -1,6 +1,7 @@
 # ⚔️ ROK BattleTrack – Kingdom 3903
 
-**Current stable release: v1.9.3**
+**Current development release: v1.10.0d**  
+**Verified stable baseline: v1.9.3**
 
 ROK BattleTrack is a mobile-first **Rise of Kingdoms performance and analytics WebApp for Kingdom 3903**. It turns prepared KvK tracking data from Google Sheets into clear personal battle profiles, requirement progress, historical comparisons, Kingdom rankings and Kingdom-wide analytics.
 
@@ -109,6 +110,26 @@ Leadership can prepare the next KvK from the BattleTrack Story Catalog.
 - Creating a KvK requires explicit confirmation before the row is written.
 
 The 50-day rule is intentionally a planning default only. BattleTrack does not automatically close a KvK when the planned date is reached.
+
+### Leadership KvK Selector
+Leadership now has a shared, data-driven KvK selector for internal analytics workflows.
+
+- KvKs / Seasons are loaded dynamically from the `KvKs` table.
+- No hardcoded KvK5 or season-specific frontend logic.
+- Historical KvKs resolve to **START → END**.
+- Active KvKs resolve to **START → LATEST**.
+- The selector displays the selected season, status, comparison mode and available date window.
+- The selector is already used by Leadership Comparison and is designed for reuse by Current KvK Overview and scan assignment.
+
+### Leadership Comparison & CSV Export
+Leadership can load a Kingdom-wide working comparison for a selected KvK.
+
+- Uses the validated BattleTrack `KvK Results` data source.
+- Historical comparison tested successfully with **KvK2 / 656 Governors**.
+- Displays Governor, classification, Start Power, Power change, KP, T4, T5, Deads, DKP, KPR and DKP rank.
+- CSV export is generated from the **currently loaded comparison dataset**, avoiding a second calculation or server fetch.
+- Export additionally includes Governor ID, End/Latest Power, total kills, requirements, progress values and Requirement Status for Leadership analysis.
+- Export is read-only and does not write to the BattleTrack database.
 
 ---
 
@@ -255,7 +276,7 @@ Season/story labels are data-driven.
 ## 🚧 Roadmap
 
 ### KvK closing workflow
-A dedicated Leadership closing flow is planned on top of the v1.9.3 KvK Management foundation.
+A dedicated Leadership closing flow is planned on top of the existing KvK Management foundation.
 
 Planned actions include:
 
@@ -271,7 +292,7 @@ The planned Start + 50 days value remains only a default planning window.
 The safe-preview workflow will be extended into a controlled import process with explicit KvK and snapshot-type selection (`START`, `MIDDLE`, `END`).
 
 ### Leadership analytics
-Prepared roadmap items include Current KvK Overview, Comparison & Export and a later Emigration Review Worklist.
+Leadership Comparison is now implemented, including the shared KvK Selector and CSV export. The next validation step is regression testing across historical KvK2–4. Remaining roadmap items include Current KvK Overview and a later Emigration Review Worklist.
 
 ### Flag Filler Registry integration
 Time-aware Main ↔ Flag Filler integration is planned but intentionally deferred until sufficient live test cases are available.
@@ -303,23 +324,29 @@ It should **not** contain:
 
 ---
 
-## 🏷️ Stable release
+## 🏷️ Release status
 
-### v1.9.3
-Current verified stable baseline.
+### v1.10.0d — Current development release
+Highlights:
+- Dynamic Leadership KvK Selector (OP-055).
+- Historical and active comparison-window resolution: **START → END** / **START → LATEST**.
+- Leadership Comparison foundation (OP-051).
+- DKP/KPR performance comparison and DKP ranking for the selected KvK.
+- Client-side CSV export of the currently loaded Leadership comparison.
+- Historical KvK2 comparison successfully tested with **656 Governors**.
+- Existing Leadership authentication, scan preview, KvK Management and public player features retained.
 
-Highlights since v1.8.0.5:
+Before promoting v1.10.0 to the next stable baseline, the Leadership Comparison / export flow should be regression-tested with historical KvK2, KvK3 and KvK4.
+
+### v1.9.3 — Verified stable baseline
 - Leadership Command Center foundation.
 - Server-side Admin authentication and short-lived session handling.
 - Kingdom Scan Safe Preview.
 - KvK Management backed by `KvKs` and `KvK Stories`.
 - Automatic next KvK Number / ID generation.
 - Story-driven Season name preview.
-- Planned End defaulted to **Start + 50 days**.
-- Planned End remains editable; no automatic KvK closure.
-- Existing player dashboard, rankings, trends and historical features retained.
-
-Future BattleTrack development should branch from **v1.9.3** unless a newer stable release supersedes it.
+- Planned End defaulted to **Start + 50 days** and remains editable.
+- No automatic KvK closure.
 
 ---
 
