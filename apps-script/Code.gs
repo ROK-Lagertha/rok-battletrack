@@ -56,6 +56,8 @@ function doGet(e) {
 
   const template = HtmlService.createTemplateFromFile('Index');
   template.battleTrackLogo = getBattleTrackLogo_();
+  template.footerCappyLeft = getDriveImageDataUri_('1xFtbagL5u1pl9a7rbJx-H39opEueSFQc');
+  template.footerCappyRight = getDriveImageDataUri_('1KKgOJijSOHzeZbW22sfiI_ucspC6foQs');
 
   return template
     .evaluate()
@@ -64,12 +66,19 @@ function doGet(e) {
 }
 
 function getBattleTrackLogo_() {
-  const fileId = '1_w7tKO-lPqvjkkpSreOdEa_Hnc4JikjV';
+  const fileId = '1sx4j_V1b7Zw73Wb-iHtNQV9wrvAhUmAJ';
   const blob = DriveApp.getFileById(fileId).getBlob();
   const base64 = Utilities.base64Encode(blob.getBytes());
   return 'data:image/png;base64,' + base64;
 }
 
+
+
+function getDriveImageDataUri_(fileId) {
+  const blob = DriveApp.getFileById(fileId).getBlob();
+  const base64 = Utilities.base64Encode(blob.getBytes());
+  return 'data:' + (blob.getContentType() || 'image/png') + ';base64,' + base64;
+}
 
 function include_(filename) {
   return HtmlService

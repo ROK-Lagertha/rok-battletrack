@@ -210,6 +210,8 @@ function renderDashboard(data){
   $('passedKvks').textContent=s.passedKvks??0;
 
   if(!k){
+    previousKvkRanking=null;
+    previousKvkLabel='';
     $('currentStatus').textContent='NO KVK DATA';
     $('currentStatus').className='status-pill';
     $('currentKvkNo').textContent='—';
@@ -229,12 +231,19 @@ function renderDashboard(data){
     $('deads').textContent=num(p.deads);
     $('startPower').textContent=num(pow.start);
     $('powerChange').textContent=signed(pow.change);
+    const historyRows=data.history||[];
+    const currentIndex=historyRows.findIndex(row=>row.id===k.id);
+    const previousRow=currentIndex>0 ? historyRows[currentIndex-1] : null;
+    previousKvkRanking=normalizeRanking(previousRow?.ranking||null);
+    previousKvkLabel=previousRow?.seasonName || (previousRow?.number!=null ? `KvK ${previousRow.number}` : '');
     renderRanking(k.ranking);
     setProgress('kill',prog.kills,p.t4t5Kills,k.requirements?.kills,'Kills');
     setProgress('dead',prog.deads,p.deads,k.requirements?.deads,'Deads');
     setProgress('overall',prog.overall);
   }
 
+  governorProgressHistory=data.history||[];
+  renderGovernorProgress();
   renderHistory(data.history||[]);
   $('dashboard').hidden=false;
 }
@@ -242,6 +251,10 @@ function renderDashboard(data){
 
 let activeRankingMetric='dkp';
 let currentRanking=null;
+let previousKvkRanking=null;
+let previousKvkLabel='';
+let governorProgressMetric='dkp';
+let governorProgressHistory=[];
 
 function ensureRankingTabs(){
   const title=$('rankingTitle');
@@ -302,6 +315,7 @@ function setRankingMetric(metric){
   $('rankingValueLabel').textContent='YOUR '+label;
   $('dkpRank').textContent='#'+num(item.rank);
   $('dkpTotal').textContent='of '+num(item.total)+' Governors';
+  renderRankChange(metric,item);
   const percentile=$('rankingPercentile');
   if(percentile){
     const ahead=item.aheadPercent!=null
@@ -315,6 +329,36 @@ function setRankingMetric(metric){
     btn.classList.toggle('active',btn.dataset.ranking===metric);
     btn.disabled=!currentRanking?.categories?.[btn.dataset.ranking];
   });
+}
+
+function renderRankChange(metric,currentItem){
+  const line=document.querySelector('.dkp-rank-line');
+  if(!line) return;
+  let host=$('rankingChange');
+  if(!host){
+    host=document.createElement('div');
+    host.id='rankingChange';
+    host.className='ranking-change';
+    line.insertAdjacentElement('afterend',host);
+  }
+
+  const previousItem=previousKvkRanking?.categories?.[metric];
+  if(!previousItem || previousItem.rank==null || currentItem?.rank==null){
+    host.innerHTML='<span class="rank-change-neutral">—</span><small>No previous KvK comparison</small>';
+    return;
+  }
+
+  const previousRank=Number(previousItem.rank);
+  const currentRank=Number(currentItem.rank);
+  const delta=previousRank-currentRank;
+
+  if(delta>0){
+    host.innerHTML=`<span class="rank-change-up">▲ ${num(delta)}</span><small>Previous KvK: #${num(previousRank)}${previousKvkLabel?' · '+esc(previousKvkLabel):''}</small>`;
+  }else if(delta<0){
+    host.innerHTML=`<span class="rank-change-down">▼ ${num(Math.abs(delta))}</span><small>Previous KvK: #${num(previousRank)}${previousKvkLabel?' · '+esc(previousKvkLabel):''}</small>`;
+  }else{
+    host.innerHTML=`<span class="rank-change-neutral">— SAME RANK</span><small>Previous KvK: #${num(previousRank)}${previousKvkLabel?' · '+esc(previousKvkLabel):''}</small>`;
+  }
 }
 
 function renderRankingNeighborhood(rows,metric){
@@ -357,7 +401,82 @@ function setProgress(prefix,value,achieved=null,requirement=null,unit=''){
   }
 }
 
+function governorMetricValue(kvk,metric){
+  const p=kvk?.performance||{};
+  const r=normalizeRanking(kvk?.ranking||null);
+  const ranked=r?.categories?.[metric];
+  if(ranked?.value!=null) return Number(ranked.value)||0;
+  if(metric==='kp') return Number(p.killPoints)||0;
+  if(metric==='kills') return Number(p.t4t5Kills)||((Number(p.t4Kills)||0)+(Number(p.t5Kills)||0));
+  if(metric==='dkp') return ((Number(p.deads)||0)*10)+((Number(p.t4Kills)||0)*5)+((Number(p.t5Kills)||0)*15);
+  if(metric==='kpr'){
+    const start=Number(kvk?.power?.start)||0;
+    return start>0 ? (Number(p.killPoints)||0)/start : 0;
+  }
+  return 0;
+}
+
+function renderGovernorProgress(){
+  const host=$('governorProgressChart');
+  const panel=$('governorProgressPanel');
+  if(!host||!panel) return;
+  const history=(governorProgressHistory||[]).slice().sort((a,b)=>(Number(a.number)||0)-(Number(b.number)||0)).slice(-3);
+  if(!history.length){ panel.hidden=true; return; }
+  panel.hidden=false;
+  const metric=governorProgressMetric;
+  const values=history.map(k=>governorMetricValue(k,metric));
+  const max=Math.max(...values,1);
+  const labels={dkp:'DKP',kpr:'KPR',kp:'KP',kills:'KILLS'};
+  const formatValue=v=>metric==='kpr' ? (Number(v)*100).toFixed(2)+'%' : num(v);
+  $('governorProgressMeta').textContent=history.length===1?'1 tracked KvK':`${history.length} tracked KvKs · ${labels[metric]}`;
+  host.innerHTML=history.map((k,i)=>{
+    const value=values[i], previous=i>0?values[i-1]:null;
+    const delta=previous==null?null:value-previous;
+    const pct=previous==null?null:(previous===0?(value===0?0:null):((value-previous)/previous)*100);
+    const height=Math.max(10,(value/max)*100);
+    const change=pct==null
+      ? '<span class="trend-baseline">BASELINE</span>'
+      : `<span class="${delta>0?'trend-up':delta<0?'trend-down':'trend-neutral'}">${delta>0?'▲':delta<0?'▼':'—'} ${Math.abs(pct).toFixed(1)}%</span>`;
+    return `<article class="governor-trend-season">
+      <div class="governor-trend-value">${formatValue(value)}</div>
+      <div class="governor-trend-bar-wrap"><i style="height:${height}%"></i></div>
+      <strong>${esc(k.seasonName||('KvK '+(k.number??'—')))}</strong>
+      ${change}
+    </article>`;
+  }).join('');
+  document.querySelectorAll('.governor-progress-tab').forEach(btn=>btn.classList.toggle('active',btn.dataset.progressMetric===metric));
+}
+
+
+document.addEventListener('click',e=>{
+  const toggle=e.target.closest('#governorProgressToggle');
+  if(!toggle) return;
+  const panel=$('governorProgressPanel');
+  const collapsed=panel.classList.toggle('collapsed');
+  toggle.setAttribute('aria-expanded',String(!collapsed));
+});
+
+
+document.addEventListener('click',e=>{
+  const toggle=e.target.closest('#historyToggle');
+  if(!toggle) return;
+  const panel=$('historyPanel');
+  const collapsed=panel.classList.toggle('collapsed');
+  toggle.setAttribute('aria-expanded',String(!collapsed));
+});
+
+document.addEventListener('click',e=>{
+  const btn=e.target.closest('.governor-progress-tab');
+  if(!btn) return;
+  const metric=btn.dataset.progressMetric;
+  if(metric===governorProgressMetric) return;
+  governorProgressMetric=metric;
+  renderGovernorProgress();
+});
+
 function renderHistory(items){
+  const historyMeta=$('historyToggleMeta');
+  if(historyMeta) historyMeta.textContent=(items||[]).length===1?'1 tracked KvK':`${(items||[]).length} tracked KvKs`;
   const root=$('history');
   root.innerHTML='';
   if(!items.length){
@@ -501,5 +620,33 @@ function showMetricInfo(event,scope){
 function closeMetricInfo(){const pop=$('metricInfoPopover');if(pop) pop.hidden=true;}
 document.addEventListener('click',e=>{const pop=$('metricInfoPopover');if(pop&&!pop.hidden&&!pop.contains(e.target)&&!e.target.closest('.metric-info-btn')) closeMetricInfo();});
 document.addEventListener('keydown',e=>{if(e.key==='Escape') closeMetricInfo();});
+
+
+// v1.7.5.1 - Collapsible BattleTrack navigation
+function toggleBattletrackMenu(forceOpen) {
+  const menu = document.getElementById('menuDropdown');
+  const toggle = document.getElementById('menuToggle');
+  if (!menu || !toggle) return;
+  const shouldOpen = typeof forceOpen === 'boolean' ? forceOpen : menu.hidden;
+  menu.hidden = !shouldOpen;
+  toggle.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
+}
+
+function menuAction(action) {
+  toggleBattletrackMenu(false);
+  if (typeof action === 'function') action();
+}
+
+document.addEventListener('click', function(event) {
+  const nav = document.querySelector('.battletrack-menu');
+  const menu = document.getElementById('menuDropdown');
+  if (nav && menu && !menu.hidden && !nav.contains(event.target)) {
+    toggleBattletrackMenu(false);
+  }
+});
+
+document.addEventListener('keydown', function(event) {
+  if (event.key === 'Escape') toggleBattletrackMenu(false);
+});
 
 </script>

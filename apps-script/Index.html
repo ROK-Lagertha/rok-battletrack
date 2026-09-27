@@ -7,6 +7,18 @@
 </head>
 <body>
   <div class="page-shell">
+    <nav class="battletrack-menu" aria-label="BattleTrack navigation">
+      <button id="menuToggle" class="menu-toggle" type="button" aria-expanded="false" aria-controls="menuDropdown" onclick="toggleBattletrackMenu()">
+        <span class="menu-icon" aria-hidden="true">☰</span><span>MENU</span>
+      </button>
+      <div id="menuDropdown" class="menu-dropdown" hidden>
+        <button id="fullRankingBtn" type="button" onclick="menuAction(() => toggleFullRanking())">KINGDOM RANKINGS</button>
+        <button id="kingdomStatsBtn" type="button" onclick="menuAction(() => toggleKingdomStats())">KINGDOM STATS</button>
+        <button id="aboutBtn" type="button" onclick="menuAction(() => toggleAbout())">ABOUT BATTLETRACK</button>
+        <button id="howItWorksBtn" type="button" onclick="menuAction(() => toggleHowItWorks())">HOW IT WORKS</button>
+        <button id="faqBtn" type="button" onclick="menuAction(() => toggleFaq())">FAQ</button>
+      </div>
+    </nav>
     <header class="battletrack-hero">
       <div class="ambient ambient-one"></div>
       <div class="ambient ambient-two"></div>
@@ -26,7 +38,7 @@
                  placeholder="Governor ID">
           <button id="searchBtn" onclick="searchGovernor()">VIEW MY STATS</button>
         </div>
-        <div class="kingdom-actions"><button id="fullRankingBtn" class="secondary-action" type="button" onclick="toggleFullRanking()">VIEW KINGDOM RANKING</button><button id="kingdomStatsBtn" class="secondary-action" type="button" onclick="toggleKingdomStats()">VIEW KINGDOM STATS</button><button id="howItWorksBtn" class="secondary-action" type="button" onclick="toggleHowItWorks()">HOW IT WORKS</button><button id="aboutBtn" class="secondary-action" type="button" onclick="toggleAbout()">ABOUT BATTLETRACK</button><button id="faqBtn" class="secondary-action" type="button" onclick="toggleFaq()">PLAYER FAQ</button></div>
+        
         <div id="message" class="message"></div>
       </section>
 
@@ -218,18 +230,51 @@
 
       </section>
 
-      <section class="panel history-panel">
-        <div class="section-head">
-          <div>
-            <div class="kicker">BATTLE RECORD</div>
-            <h3>KvK History</h3>
+      <section id="governorProgressPanel" class="governor-progress-panel collapsed">
+        <button id="governorProgressToggle" class="governor-progress-toggle" type="button" aria-expanded="false">
+          <span>
+            <span class="eyebrow">GOVERNOR TREND</span>
+            <strong>BATTLE PROGRESS · LAST 3 KVKs</strong>
+          </span>
+          <span class="governor-progress-toggle-right">
+            <span id="governorProgressMeta" class="governor-progress-meta"></span>
+            <span class="governor-progress-chevron">⌄</span>
+          </span>
+        </button>
+        <div id="governorProgressBody" class="governor-progress-body">
+          <div class="governor-progress-tabs" role="group" aria-label="Governor progress metric">
+            <button type="button" class="governor-progress-tab active" data-progress-metric="dkp">DKP</button>
+            <button type="button" class="governor-progress-tab" data-progress-metric="kpr">KPR</button>
+            <button type="button" class="governor-progress-tab" data-progress-metric="kp">KP</button>
+            <button type="button" class="governor-progress-tab" data-progress-metric="kills">KILLS</button>
           </div>
+          <div id="governorProgressChart" class="governor-progress-chart"></div>
         </div>
-        <div id="history" class="history"></div>
+      </section>
+
+      <section id="historyPanel" class="governor-progress-panel history-progress-panel collapsed">
+        <button id="historyToggle" class="governor-progress-toggle history-progress-toggle" type="button" aria-expanded="false">
+          <span>
+            <span class="eyebrow">BATTLE RECORD</span>
+            <strong>KvK HISTORY</strong>
+          </span>
+          <span class="governor-progress-toggle-right">
+            <span id="historyToggleMeta" class="governor-progress-meta"></span>
+            <span class="governor-progress-chevron">⌄</span>
+          </span>
+        </button>
+        <div id="historyBody" class="governor-progress-body history-progress-body">
+          <div id="history"></div>
+          <button id="historyToggleOlder" class="archive-toggle" type="button" onclick="toggleOlderHistory()" hidden>SHOW OLDER KVKs</button>
+        </div>
       </section>
     </main>
 
-    <footer>ROK BATTLETRACK · KINGDOM 3903</footer>
+    <footer class="battletrack-footer">
+      <img class="footer-cappy footer-cappy-left" src="<?!= footerCappyLeft ?>" alt="" aria-hidden="true">
+      <div class="footer-brand">ROK BATTLETRACK · KINGDOM 3903</div>
+      <img class="footer-cappy footer-cappy-right" src="<?!= footerCappyRight ?>" alt="" aria-hidden="true">
+    </footer>
   </div>
 
   <div id="metricInfoPopover" class="metric-info-popover" hidden role="dialog" aria-live="polite">
