@@ -82,11 +82,11 @@
           <small>Available when scan data exists for the selected KvK</small>
         </article>
         <article class="admin-module-card">
-          <div class="admin-module-state">OP-051 · PREPARED</div>
+          <div class="admin-module-state">OP-051 · v1.10.0d · COMPARISON + EXPORT</div>
           <h4>Comparison &amp; Export</h4>
-          <p>Generate the current Leadership comparison and export working statistics.</p>
-          <button type="button" disabled>DOWNLOAD KVK STATISTICS</button>
-          <small>Available after START → LATEST data exists</small>
+          <p>Select any tracked KvK as the source for Leadership comparison and future exports.</p>
+          <button type="button" onclick="openLeadershipKvkSelector()">SELECT KVK</button>
+          <small>Historical: START → END · Active: START → LATEST</small>
         </article>
       </div>
       <div class="admin-preflight-note"><strong>ADMIN FOUNDATION READY</strong><span>No live scan data is written or changed in this phase.</span></div>
@@ -330,6 +330,30 @@
     <div id="metricInfoText" class="metric-info-text"></div>
     <div id="metricInfoFormula" class="metric-info-formula"></div>
   </div>
+
+  <div id="leadershipKvkSelectorModal" class="admin-modal" hidden role="dialog" aria-modal="true" aria-labelledby="leadershipKvkSelectorTitle">
+    <div class="admin-modal-card leadership-kvk-selector-card">
+      <button type="button" class="admin-modal-close" onclick="closeLeadershipKvkSelector()" aria-label="Close KvK selector">×</button>
+      <div class="kicker">OP-055 · LEADERSHIP KVK SELECTOR</div>
+      <h3 id="leadershipKvkSelectorTitle">Select KvK</h3>
+      <p>Choose any tracked KvK. BattleTrack determines the comparison window from the KvK status.</p>
+      <label>KVK / SEASON<select id="leadershipKvkSelect" onchange="updateLeadershipKvkSelection()"><option value="">Loading KvKs…</option></select></label>
+      <div id="leadershipKvkSelectionPreview" class="leadership-kvk-preview" hidden>
+        <div><span>KVK</span><strong id="leadershipSelectedKvk">—</strong></div>
+        <div><span>STATUS</span><strong id="leadershipSelectedStatus">—</strong></div>
+        <div><span>COMPARISON</span><strong id="leadershipSelectedMode">—</strong></div>
+        <div><span>WINDOW</span><strong id="leadershipSelectedDates">—</strong></div>
+      </div>
+      <div id="leadershipKvkSelectorMessage" class="admin-login-message"></div>
+      <button id="leadershipKvkContinueBtn" type="button" class="admin-login-submit" disabled onclick="confirmLeadershipKvkSelection()">USE SELECTED KVK</button>
+      <div id="leadershipComparisonPanel" class="leadership-comparison-panel" hidden>
+        <div class="leadership-comparison-head"><div><span>OP-051 · LEADERSHIP COMPARISON</span><strong id="leadershipComparisonTitle">—</strong></div><div><span>GOVERNORS</span><strong id="leadershipComparisonCount">0</strong></div></div>
+        <div class="leadership-comparison-actions"><button id="leadershipComparisonExportBtn" type="button" onclick="exportLeadershipComparisonCsv()">DOWNLOAD CSV</button><span id="leadershipComparisonExportHint">Exports the currently loaded comparison.</span></div><div class="leadership-comparison-table-wrap"><table class="leadership-comparison-table"><thead><tr><th>RANK</th><th>GOVERNOR</th><th>CLASS</th><th>START POWER</th><th>POWER Δ</th><th>KP</th><th>T4</th><th>T5</th><th>DEADS</th><th>DKP</th><th>KPR</th><th>REQ.</th></tr></thead><tbody id="leadershipComparisonBody"></tbody></table></div>
+      </div>
+      <div class="scan-safety-note"><strong>COMPARISON MODE</strong><span>Read-only · no database data is changed · CSV export is generated locally from the loaded comparison.</span></div>
+    </div>
+  </div>
+
   <div id="kvkManagementModal" class="admin-modal" hidden role="dialog" aria-modal="true" aria-labelledby="kvkManagementTitle">
     <div class="admin-modal-card kvk-management-card">
       <button type="button" class="admin-modal-close" onclick="closeKvkManagement()" aria-label="Close KvK management">×</button>

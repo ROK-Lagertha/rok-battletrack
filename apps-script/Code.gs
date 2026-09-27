@@ -170,6 +170,112 @@ function adminGetKvkManagementData(token) {
   };
 }
 
+/**
+ * OP-055 - Shared Leadership KvK Selector (v1.10.0b).
+ * Returns the KvKs table as the single source of truth for Leadership tools.
+ */
+function adminGetLeadershipKvks(token) {
+  const user = getAdminSessionUser_(token);
+  if (!user) return { ok: false, code: 'SESSION_EXPIRED', message: 'Admin session expired.' };
+
+  const ss = getDatabase_();
+  const kvkSheet = ss.getSheetByName(BT.SHEETS.KVKS);
+  if (!kvkSheet) throw new Error('KvKs sheet is missing.');
+
+  const kvks = sheetToObjects_(kvkSheet).map(r => {
+    const status = String(r['Status'] || '').trim();
+    const normalizedStatus = status.toLowerCase();
+    const isHistorical = normalizedStatus === 'historical' || normalizedStatus === 'completed' || normalizedStatus === 'closed';
+    return {
+      id: String(r['KvK ID'] || '').trim(),
+      number: Number(r['KvK Number']) || 0,
+      seasonName: String(r['Season Name'] || '').trim(),
+      startDate: formatAdminDate_(r['Start Scan Date']),
+      endDate: formatAdminDate_(r['End Scan Date']),
+      status: status,
+      comparisonMode: isHistorical ? 'START_END' : 'START_LATEST'
+    };
+  }).filter(r => r.id).sort((a,b) => b.number - a.number);
+
+  return { ok: true, kvks: kvks };
+}
+
+/**
+ * OP-051 - Leadership Comparison (v1.10.0c).
+ * Reads the prepared BattleTrack KvK Results for one selected KvK.
+ * No database data is changed.
+ */
+function adminGetKvkComparison(token, kvkId) {
+  const user = getAdminSessionUser_(token);
+  if (!user) return { ok:false, code:'SESSION_EXPIRED', message:'Admin session expired.' };
+
+  kvkId = String(kvkId || '').trim();
+  if (!kvkId) return { ok:false, code:'MISSING_KVK', message:'Please select a KvK.' };
+
+  const ss = getDatabase_();
+  const kvkSheet = ss.getSheetByName(BT.SHEETS.KVKS);
+  const resultSheet = ss.getSheetByName(BT.SHEETS.RESULTS);
+  if (!kvkSheet || !resultSheet) throw new Error('BattleTrack comparison sheets are missing.');
+
+  const kvk = sheetToObjects_(kvkSheet).find(r => String(r['KvK ID'] || '').trim() === kvkId);
+  if (!kvk) return { ok:false, code:'KVK_NOT_FOUND', message:'Selected KvK was not found.' };
+
+  const status = String(kvk['Status'] || '').trim();
+  const normalizedStatus = status.toLowerCase();
+  const historical = normalizedStatus === 'historical' || normalizedStatus === 'completed' || normalizedStatus === 'closed';
+
+  const rows = sheetToObjects_(resultSheet)
+    .filter(r => String(r['KvK ID'] || '').trim() === kvkId)
+    .map(r => {
+      const governorId = normalizeId_(r['Governor ID']);
+      const t4 = Number(r['KvK T4 Kills']) || 0;
+      const t5 = Number(r['KvK T5 Kills']) || 0;
+      const deads = Number(r['KvK Deads']) || 0;
+      const kp = Number(r['KvK Kill Points']) || 0;
+      const startPower = Number(r['Start Power']) || 0;
+      return {
+        governorId: governorId,
+        governorName: String(r['Governor Name'] || '').trim() || ('Governor ' + governorId),
+        classification: String(r['Classification'] || 'Regular').trim(),
+        startPower: startPower,
+        endPower: numberOrNull_(r['End/Latest Power']),
+        powerDelta: numberOrNull_(r['Power Delta']),
+        killPoints: kp,
+        t4Kills: t4,
+        t5Kills: t5,
+        kills: t4 + t5,
+        deads: deads,
+        dkp: (deads * 10) + (t4 * 5) + (t5 * 15),
+        kpr: startPower > 0 ? kp / startPower : 0,
+        killRequirement: numberOrNull_(r['Kill Requirement']),
+        deadRequirement: numberOrNull_(r['Dead Requirement']),
+        killProgress: numberOrNull_(r['Kill Progress %']),
+        deadProgress: numberOrNull_(r['Dead Progress %']),
+        overallProgress: numberOrNull_(r['Overall Progress %']),
+        requirementStatus: String(r['Requirement Status'] || '').trim()
+      };
+    })
+    .filter(r => r.governorId)
+    .sort((a,b) => (b.dkp-a.dkp) || (b.killPoints-a.killPoints) || String(a.governorId).localeCompare(String(b.governorId)));
+
+  rows.forEach((r,i) => r.dkpRank = i + 1);
+
+  return {
+    ok:true,
+    kvk:{
+      id:kvkId,
+      number:Number(kvk['KvK Number']) || 0,
+      seasonName:String(kvk['Season Name'] || '').trim(),
+      status:status,
+      startDate:formatAdminDate_(kvk['Start Scan Date']),
+      endDate:formatAdminDate_(kvk['End Scan Date']),
+      comparisonMode:historical ? 'START_END' : 'START_LATEST'
+    },
+    total:rows.length,
+    rows:rows
+  };
+}
+
 function adminCreateKvk(token, payload) {
   const user = getAdminSessionUser_(token);
   if (!user) return { ok: false, code: 'SESSION_EXPIRED', message: 'Admin session expired.' };

@@ -800,4 +800,122 @@ function createNewKvk(){
   }).withFailureHandler(function(){if(btn){btn.disabled=false;btn.textContent='CREATE KVK';}if(msg)msg.textContent='KvK could not be created.';}).adminCreateKvk(adminSessionToken,{story:story,startDate:startDate,endDate:endDate});
 }
 
+
+
+// v1.10.0b - OP-055 Shared Leadership KvK Selector
+let leadershipKvkSelectorState = { kvks: [], selected: null };
+let leadershipComparisonState = null;
+function openLeadershipKvkSelector(){
+  if(!adminSessionToken){openAdminAccess();return;}
+  const modal=document.getElementById('leadershipKvkSelectorModal'); if(!modal)return;
+  modal.hidden=false; document.body.style.overflow='hidden';
+  const sel=document.getElementById('leadershipKvkSelect');
+  const msg=document.getElementById('leadershipKvkSelectorMessage');
+  const preview=document.getElementById('leadershipKvkSelectionPreview');
+  const btn=document.getElementById('leadershipKvkContinueBtn');
+  if(sel)sel.innerHTML='<option value="">Loading KvKs…</option>';
+  if(msg)msg.textContent=''; if(preview)preview.hidden=true; if(btn)btn.disabled=true;
+  google.script.run.withSuccessHandler(function(result){
+    if(!result||!result.ok){
+      if(result&&result.code==='SESSION_EXPIRED'){clearAdminSession();closeLeadershipKvkSelector();openAdminLogin();return;}
+      if(msg)msg.textContent=(result&&result.message)||'KvK list could not be loaded.'; return;
+    }
+    leadershipKvkSelectorState={kvks:result.kvks||[],selected:null};
+    if(sel){
+      sel.innerHTML='<option value="">SELECT KVK / SEASON</option>'+leadershipKvkSelectorState.kvks.map(function(k){
+        return '<option value="'+esc(k.id)+'">KvK '+k.number+' · '+esc(k.seasonName||k.id)+'</option>';
+      }).join('');
+    }
+  }).withFailureHandler(function(){if(msg)msg.textContent='KvK list is temporarily unavailable.';}).adminGetLeadershipKvks(adminSessionToken);
+}
+function closeLeadershipKvkSelector(){
+  const modal=document.getElementById('leadershipKvkSelectorModal'); if(modal)modal.hidden=true;
+  document.body.style.overflow='';
+}
+function updateLeadershipKvkSelection(){
+  const id=(document.getElementById('leadershipKvkSelect')||{}).value||'';
+  const k=(leadershipKvkSelectorState.kvks||[]).find(function(x){return x.id===id;})||null;
+  leadershipKvkSelectorState.selected=k;
+  const preview=document.getElementById('leadershipKvkSelectionPreview');
+  const btn=document.getElementById('leadershipKvkContinueBtn');
+  if(!k){if(preview)preview.hidden=true;if(btn)btn.disabled=true;return;}
+  if(preview)preview.hidden=false; if(btn)btn.disabled=false;
+  document.getElementById('leadershipSelectedKvk').textContent='KvK '+k.number+' · '+(k.seasonName||k.id);
+  document.getElementById('leadershipSelectedStatus').textContent=k.status||'—';
+  document.getElementById('leadershipSelectedMode').textContent=k.comparisonMode==='START_END'?'START → END':'START → LATEST';
+  document.getElementById('leadershipSelectedDates').textContent=(k.startDate||'—')+' → '+(k.comparisonMode==='START_END'?(k.endDate||'END'):'LATEST');
+}
+function confirmLeadershipKvkSelection(){
+  const k=leadershipKvkSelectorState.selected; if(!k)return;
+  const msg=document.getElementById('leadershipKvkSelectorMessage');
+  const btn=document.getElementById('leadershipKvkContinueBtn');
+  const panel=document.getElementById('leadershipComparisonPanel');
+  if(msg){msg.classList.remove('success');msg.textContent='Loading Leadership Comparison…';}
+  if(btn){btn.disabled=true;btn.textContent='LOADING COMPARISON…';}
+  if(panel)panel.hidden=true;
+  google.script.run.withSuccessHandler(function(result){
+    if(btn){btn.disabled=false;btn.textContent='REFRESH SELECTED KVK';}
+    if(!result||!result.ok){
+      if(result&&result.code==='SESSION_EXPIRED'){clearAdminSession();closeLeadershipKvkSelector();openAdminLogin();return;}
+      if(msg)msg.textContent=(result&&result.message)||'Comparison could not be loaded.'; return;
+    }
+    leadershipComparisonState=result;
+    renderLeadershipComparison(result);
+    if(msg){msg.classList.add('success');msg.textContent='KvK '+result.kvk.number+' loaded · '+result.total+' Governors · '+(result.kvk.comparisonMode==='START_END'?'START → END':'START → LATEST')+'.';}
+  }).withFailureHandler(function(){if(btn){btn.disabled=false;btn.textContent='USE SELECTED KVK';}if(msg)msg.textContent='Comparison is temporarily unavailable.';}).adminGetKvkComparison(adminSessionToken,k.id);
+}
+function renderLeadershipComparison(result){
+  const panel=document.getElementById('leadershipComparisonPanel');
+  const body=document.getElementById('leadershipComparisonBody');
+  if(!panel||!body)return;
+  document.getElementById('leadershipComparisonTitle').textContent='KvK '+result.kvk.number+' · '+(result.kvk.seasonName||result.kvk.id);
+  document.getElementById('leadershipComparisonCount').textContent=String(result.total||0);
+  const fmt=function(v){return v===null||v===undefined||v===''?'—':Number(v).toLocaleString('en-US');};
+  const pct=function(v){return v===null||v===undefined?'—':(Number(v)*100).toFixed(2)+'%';};
+  body.innerHTML=(result.rows||[]).map(function(r){
+    const req=(r.requirementStatus||'—').replace(/_/g,' ');
+    return '<tr><td>#'+r.dkpRank+'</td><td><strong>'+esc(r.governorName)+'</strong><small>'+esc(r.governorId)+'</small></td><td>'+esc(r.classification||'—')+'</td><td>'+fmt(r.startPower)+'</td><td>'+fmt(r.powerDelta)+'</td><td>'+fmt(r.killPoints)+'</td><td>'+fmt(r.t4Kills)+'</td><td>'+fmt(r.t5Kills)+'</td><td>'+fmt(r.deads)+'</td><td><strong>'+fmt(r.dkp)+'</strong></td><td>'+pct(r.kpr)+'</td><td>'+esc(req)+'</td></tr>';
+  }).join('');
+  if(!result.rows||!result.rows.length)body.innerHTML='<tr><td colspan="12" class="leadership-comparison-empty">No BattleTrack results found for this KvK.</td></tr>';
+  panel.hidden=false;
+}
+
+
+// v1.10.0d - OP-051 Leadership Comparison CSV export
+function exportLeadershipComparisonCsv(){
+  const result=leadershipComparisonState;
+  const msg=document.getElementById('leadershipKvkSelectorMessage');
+  if(!result||!result.ok||!result.kvk){
+    if(msg){msg.classList.remove('success');msg.textContent='Load a KvK comparison before exporting.';}
+    return;
+  }
+  const headers=[
+    'DKP Rank','Governor ID','Governor Name','Classification','Start Power','End/Latest Power','Power Delta',
+    'Kill Points','T4 Kills','T5 Kills','Total T4+T5 Kills','Deads','DKP','KPR %',
+    'Kill Requirement','Dead Requirement','Kill Progress %','Dead Progress %','Overall Progress %','Requirement Status'
+  ];
+  const csvValue=function(v){
+    if(v===null||v===undefined)return '';
+    const text=String(v).replace(/"/g,'""');
+    return /[;"\r\n]/.test(text)?'"'+text+'"':text;
+  };
+  const percent=function(v){return v===null||v===undefined||v===''?'':(Number(v)*100).toFixed(2);};
+  const rows=(result.rows||[]).map(function(r){return [
+    r.dkpRank,r.governorId,r.governorName,r.classification,r.startPower,r.endPower,r.powerDelta,
+    r.killPoints,r.t4Kills,r.t5Kills,r.kills,r.deads,r.dkp,percent(r.kpr),
+    r.killRequirement,r.deadRequirement,r.killProgress,r.deadProgress,r.overallProgress,r.requirementStatus
+  ];});
+  const lines=[headers].concat(rows).map(function(row){return row.map(csvValue).join(';');});
+  const csv='\uFEFF'+lines.join('\r\n');
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  const safeSeason=String(result.kvk.seasonName||result.kvk.id||'KvK').replace(/[^a-z0-9_-]+/gi,'_').replace(/^_+|_+$/g,'');
+  a.href=url;
+  a.download='ROK-BattleTrack_KvK'+result.kvk.number+'_'+safeSeason+'_Leadership-Comparison.csv';
+  document.body.appendChild(a);a.click();a.remove();
+  setTimeout(function(){URL.revokeObjectURL(url);},1000);
+  if(msg){msg.classList.add('success');msg.textContent='KvK '+result.kvk.number+' CSV exported · '+(result.total||0)+' Governors.';}
+}
+
 </script>
