@@ -23,7 +23,8 @@ const BT = {
   SHEETS: {
     GOVERNORS: 'Governors',
     KVKS: 'KvKs',
-    RESULTS: 'KvK Results'
+    RESULTS: 'KvK Results',
+    STORIES: 'KvK Stories'
   },
 
   STATUS: {
@@ -84,6 +85,150 @@ function include_(filename) {
   return HtmlService
     .createHtmlOutputFromFile(filename)
     .getContent();
+}
+
+
+/**
+ * OP-047 - Leadership Admin Center authentication.
+ * Configure Script Properties: BT_ADMIN_USER and BT_ADMIN_PASSWORD.
+ * Credentials never leave the server; successful login returns a short-lived token.
+ */
+function adminLogin(username, password) {
+  const props = PropertiesService.getScriptProperties();
+  const configuredUser = String(props.getProperty('BT_ADMIN_USER') || '').trim();
+  const configuredPassword = String(props.getProperty('BT_ADMIN_PASSWORD') || '');
+
+  if (!configuredUser || !configuredPassword) {
+    return { ok: false, code: 'NOT_CONFIGURED', message: 'Admin access is not configured yet.' };
+  }
+
+  if (String(username || '').trim() !== configuredUser || String(password || '') !== configuredPassword) {
+    Utilities.sleep(350);
+    return { ok: false, code: 'INVALID_LOGIN', message: 'Invalid admin credentials.' };
+  }
+
+  const token = Utilities.getUuid() + Utilities.getUuid();
+  CacheService.getScriptCache().put('BT_ADMIN_SESSION_' + token, configuredUser, 1800);
+  return { ok: true, token: token, user: configuredUser, expiresIn: 1800 };
+}
+
+function adminValidateSession(token) {
+  const user = getAdminSessionUser_(token);
+  return { ok: !!user, user: user || null };
+}
+
+function adminLogout(token) {
+  if (token) CacheService.getScriptCache().remove('BT_ADMIN_SESSION_' + String(token));
+  return { ok: true };
+}
+
+function getAdminSessionUser_(token) {
+  if (!token) return null;
+  return CacheService.getScriptCache().get('BT_ADMIN_SESSION_' + String(token));
+}
+
+
+/**
+ * OP-053 - Leadership KvK Management.
+ * KvKs remains the single source of truth; story options come from KvK Stories.
+ */
+function adminGetKvkManagementData(token) {
+  const user = getAdminSessionUser_(token);
+  if (!user) return { ok: false, code: 'SESSION_EXPIRED', message: 'Admin session expired.' };
+
+  const ss = getDatabase_();
+  const kvkSheet = ss.getSheetByName(BT.SHEETS.KVKS);
+  const storySheet = ss.getSheetByName(BT.SHEETS.STORIES);
+  if (!kvkSheet || !storySheet) throw new Error('KvK management sheets are missing.');
+
+  const kvks = sheetToObjects_(kvkSheet);
+  const stories = sheetToObjects_(storySheet)
+    .filter(r => String(r['Active'] || '').toUpperCase() !== 'FALSE')
+    .map(r => ({
+      name: String(r['Story Name'] || '').trim(),
+      baseStory: String(r['Base Story'] || '').trim(),
+      variant: String(r['Variant'] || '').trim()
+    }))
+    .filter(r => r.name);
+
+  const numbers = kvks.map(r => Number(r['KvK Number']) || 0);
+  const nextNumber = Math.max.apply(null, [0].concat(numbers)) + 1;
+
+  return {
+    ok: true,
+    nextNumber: nextNumber,
+    nextKvkId: '3903-KVK' + nextNumber,
+    stories: stories,
+    kvks: kvks.map(r => ({
+      id: String(r['KvK ID'] || ''),
+      number: Number(r['KvK Number']) || 0,
+      seasonName: String(r['Season Name'] || ''),
+      startDate: formatAdminDate_(r['Start Scan Date']),
+      endDate: formatAdminDate_(r['End Scan Date']),
+      status: String(r['Status'] || '')
+    })).sort((a,b) => b.number - a.number)
+  };
+}
+
+function adminCreateKvk(token, payload) {
+  const user = getAdminSessionUser_(token);
+  if (!user) return { ok: false, code: 'SESSION_EXPIRED', message: 'Admin session expired.' };
+
+  payload = payload || {};
+  const story = String(payload.story || '').trim();
+  const startDate = String(payload.startDate || '').trim();
+  let endDate = String(payload.endDate || '').trim();
+  if (!story || !startDate) return { ok:false, code:'MISSING_FIELDS', message:'Story and start date are required.' };
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate)) return { ok:false, code:'INVALID_DATE', message:'Please use a valid start date.' };
+  if (!endDate) endDate = addDaysToIsoDate_(startDate, 50);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(endDate)) return { ok:false, code:'INVALID_DATE', message:'Please use a valid end date.' };
+  if (endDate < startDate) return { ok:false, code:'INVALID_RANGE', message:'KvK end cannot be before KvK start.' };
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const ss = getDatabase_();
+    const kvkSheet = ss.getSheetByName(BT.SHEETS.KVKS);
+    const storySheet = ss.getSheetByName(BT.SHEETS.STORIES);
+    if (!kvkSheet || !storySheet) throw new Error('KvK management sheets are missing.');
+
+    const allowedStories = sheetToObjects_(storySheet)
+      .filter(r => String(r['Active'] || '').toUpperCase() !== 'FALSE')
+      .map(r => String(r['Story Name'] || '').trim());
+    if (allowedStories.indexOf(story) === -1) return { ok:false, code:'INVALID_STORY', message:'Selected KvK story is not available in the BattleTrack catalog.' };
+
+    const kvks = sheetToObjects_(kvkSheet);
+    const nextNumber = Math.max.apply(null, [0].concat(kvks.map(r => Number(r['KvK Number']) || 0))) + 1;
+    const kvkId = '3903-KVK' + nextNumber;
+    if (kvks.some(r => String(r['KvK ID'] || '') === kvkId)) return { ok:false, code:'DUPLICATE_KVK', message:'This KvK already exists.' };
+
+    const seasonName = 'Season ' + nextNumber + ' - ' + story;
+    const start = new Date(startDate + 'T12:00:00');
+    const end = new Date(endDate + 'T12:00:00');
+    kvkSheet.appendRow([kvkId, nextNumber, seasonName, start, end, 'Planned', '']);
+    const row = kvkSheet.getLastRow();
+    kvkSheet.getRange(row, 4, 1, 2).setNumberFormat('yyyy-mm-dd');
+
+    return { ok:true, kvk:{ id:kvkId, number:nextNumber, seasonName:seasonName, startDate:startDate, endDate:endDate, status:'Planned' } };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function addDaysToIsoDate_(isoDate, days) {
+  const parts = String(isoDate || '').split('-').map(Number);
+  if (parts.length !== 3 || parts.some(n => !Number.isFinite(n))) return '';
+  const d = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2]));
+  d.setUTCDate(d.getUTCDate() + Number(days || 0));
+  return Utilities.formatDate(d, 'UTC', 'yyyy-MM-dd');
+}
+
+function formatAdminDate_(value) {
+  if (!value) return '';
+  if (Object.prototype.toString.call(value) === '[object Date]' && !isNaN(value)) {
+    return Utilities.formatDate(value, Session.getScriptTimeZone() || 'Europe/Berlin', 'yyyy-MM-dd');
+  }
+  return String(value);
 }
 
 

@@ -8,6 +8,7 @@
 <body>
   <div class="page-shell">
     <nav class="battletrack-menu" aria-label="BattleTrack navigation">
+      <button id="adminOpenBtn" class="admin-nav-btn" type="button" onclick="openAdminAccess()"><span aria-hidden="true">◆</span><span>ADMIN</span></button>
       <button id="menuToggle" class="menu-toggle" type="button" aria-expanded="false" aria-controls="menuDropdown" onclick="toggleBattletrackMenu()">
         <span class="menu-icon" aria-hidden="true">☰</span><span>MENU</span>
       </button>
@@ -44,6 +45,52 @@
 
       <div class="hero-divider"><span>◆</span></div>
     </header>
+
+    <section id="adminPanel" class="panel admin-command-panel" hidden>
+      <div class="admin-command-head">
+        <div>
+          <div class="kicker">KINGDOM 3903 · LEADERSHIP</div>
+          <h3>Leadership Command Center</h3>
+          <p>Internal BattleTrack workspace for Kingdom scans, current KvK monitoring and Leadership exports.</p>
+        </div>
+        <div class="admin-head-actions">
+          <span id="adminSessionLabel" class="admin-session-label">SECURE SESSION</span>
+          <button type="button" class="admin-logout-btn" onclick="logoutAdmin()">LOGOUT</button>
+        </div>
+      </div>
+
+      <div class="admin-module-grid">
+        <article class="admin-module-card admin-module-card-primary">
+          <div class="admin-module-state">OP-053 · KVK MANAGEMENT</div>
+          <h4>KvK Management</h4>
+          <p>Create the next KvK from the BattleTrack Story Catalog. KvK Number and ID are generated automatically.</p>
+          <button type="button" onclick="openKvkManagement()">ADD NEW KVK</button>
+          <small>Writes only after explicit confirmation</small>
+        </article>
+        <article class="admin-module-card">
+          <div class="admin-module-state">OP-048 · SAFE PREVIEW</div>
+          <h4>Kingdom Scan</h4>
+          <p>Select a Kingdom scan and validate it locally before any future import into BattleTrack.</p>
+          <button type="button" onclick="openScanUpload()">UPLOAD KINGDOM SCAN</button>
+          <small>Preview only · no database or Drive changes</small>
+        </article>
+        <article class="admin-module-card">
+          <div class="admin-module-state">OP-050 · PREPARED</div>
+          <h4>Current KvK Overview</h4>
+          <p>Leadership view for Governor performance, Requirements and current progress.</p>
+          <button type="button" disabled>OPEN KVK OVERVIEW</button>
+          <small>Available when scan data exists for the selected KvK</small>
+        </article>
+        <article class="admin-module-card">
+          <div class="admin-module-state">OP-051 · PREPARED</div>
+          <h4>Comparison &amp; Export</h4>
+          <p>Generate the current Leadership comparison and export working statistics.</p>
+          <button type="button" disabled>DOWNLOAD KVK STATISTICS</button>
+          <small>Available after START → LATEST data exists</small>
+        </article>
+      </div>
+      <div class="admin-preflight-note"><strong>ADMIN FOUNDATION READY</strong><span>No live scan data is written or changed in this phase.</span></div>
+    </section>
 
     <section id="fullRankingPanel" class="panel full-ranking-panel" hidden>
       <div class="section-head full-ranking-head">
@@ -282,6 +329,56 @@
     <div id="metricInfoTitle" class="metric-info-title">DKP</div>
     <div id="metricInfoText" class="metric-info-text"></div>
     <div id="metricInfoFormula" class="metric-info-formula"></div>
+  </div>
+  <div id="kvkManagementModal" class="admin-modal" hidden role="dialog" aria-modal="true" aria-labelledby="kvkManagementTitle">
+    <div class="admin-modal-card kvk-management-card">
+      <button type="button" class="admin-modal-close" onclick="closeKvkManagement()" aria-label="Close KvK management">×</button>
+      <div class="kicker">OP-053 · KVK MANAGEMENT</div>
+      <h3 id="kvkManagementTitle">Add New KvK</h3>
+      <p>Create the next tracked KvK. BattleTrack generates the KvK number, ID, Season Name and planned end date automatically. The end date remains editable for an early KvK finish.</p>
+      <div class="kvk-auto-grid">
+        <div><span>NEXT KVK</span><strong id="kvkNextNumber">—</strong></div>
+        <div><span>KVK ID</span><strong id="kvkNextId">—</strong></div>
+      </div>
+      <label>KVK STORY<select id="kvkStorySelect" onchange="updateKvkSeasonPreview()"><option value="">Loading Story Catalog…</option></select></label>
+      <div class="kvk-date-grid">
+        <label>KVK START<input id="kvkStartDate" type="date" onchange="updateKvkPlannedEndDate()"></label>
+        <label>KVK END <small>(AUTO +50 DAYS · EDITABLE)</small><input id="kvkEndDate" type="date"></label>
+      </div>
+      <div class="kvk-season-preview"><span>SEASON NAME</span><strong id="kvkSeasonPreview">Select a story</strong></div>
+      <div id="kvkManagementMessage" class="admin-login-message"></div>
+      <button id="createKvkBtn" type="button" class="admin-login-submit" onclick="createNewKvk()">CREATE KVK</button>
+      <div class="scan-safety-note"><strong>SINGLE SOURCE OF TRUTH</strong><span>New KvKs are written to the KvKs table.</span></div>
+    </div>
+  </div>
+
+  <div id="scanUploadModal" class="admin-modal" hidden role="dialog" aria-modal="true" aria-labelledby="scanUploadTitle">
+    <div class="admin-modal-card scan-upload-card">
+      <button type="button" class="admin-modal-close" onclick="closeScanUpload()" aria-label="Close scan upload">×</button>
+      <div class="kicker">OP-048 · SAFE PREVIEW</div>
+      <h3 id="scanUploadTitle">Kingdom Scan Validation</h3>
+      <p>Select the latest Kingdom scan. BattleTrack will inspect the file locally in your browser. Nothing is uploaded to Drive or written to the database in this phase.</p>
+      <label class="scan-dropzone" for="kingdomScanFile">
+        <strong>SELECT KINGDOM SCAN</strong>
+        <span>CSV / TXT / XLSX · preview only</span>
+        <input id="kingdomScanFile" type="file" accept=".csv,.txt,.xlsx" onchange="validateKingdomScan(this.files[0])">
+      </label>
+      <div id="scanValidationResult" class="scan-validation-result" hidden></div>
+      <div class="scan-safety-note"><strong>SAFE MODE</strong><span>No import action is available yet.</span></div>
+    </div>
+  </div>
+
+  <div id="adminLoginModal" class="admin-modal" hidden role="dialog" aria-modal="true" aria-labelledby="adminLoginTitle">
+    <div class="admin-modal-card">
+      <button type="button" class="admin-modal-close" onclick="closeAdminLogin()" aria-label="Close admin login">×</button>
+      <div class="kicker">KINGDOM 3903 · RESTRICTED</div>
+      <h3 id="adminLoginTitle">Leadership Access</h3>
+      <p>Sign in to open the BattleTrack Leadership Command Center.</p>
+      <label>USERNAME<input id="adminUsername" autocomplete="username"></label>
+      <label>PASSWORD<input id="adminPassword" type="password" autocomplete="current-password"></label>
+      <div id="adminLoginMessage" class="admin-login-message"></div>
+      <button id="adminLoginBtn" type="button" class="admin-login-submit" onclick="submitAdminLogin()">LOGIN</button>
+    </div>
   </div>
   <?!= include_('Scripts'); ?>
 </body>

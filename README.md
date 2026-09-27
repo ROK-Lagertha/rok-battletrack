@@ -1,6 +1,6 @@
 # ⚔️ ROK BattleTrack – Kingdom 3903
 
-**Current stable release: v1.8.0.5**
+**Current stable release: v1.9.3**
 
 ROK BattleTrack is a mobile-first **Rise of Kingdoms performance and analytics WebApp for Kingdom 3903**. It turns prepared KvK tracking data from Google Sheets into clear personal battle profiles, requirement progress, historical comparisons, Kingdom rankings and Kingdom-wide analytics.
 
@@ -75,6 +75,40 @@ Historical KvKs are contained inside a dedicated collapsible **KvK History** blo
 - Individual historical records use single-open accordion behavior.
 - Historical stats, Power, requirements, progress and result status remain available.
 - Season/story names come from the database rather than frontend hardcoding.
+
+---
+
+
+## 🔐 Leadership Command Center
+
+BattleTrack now includes a protected Leadership workspace for internal Kingdom administration.
+
+- Server-side Admin login using Google Apps Script Script Properties.
+- Short-lived session token stored in Apps Script cache.
+- Dedicated Leadership Command Center in the WebApp.
+- Public player features remain separate from Leadership-only tools.
+
+> Admin credentials are not stored in the public repository. Configure `BT_ADMIN_USER` and `BT_ADMIN_PASSWORD` in Apps Script Script Properties.
+
+### Kingdom Scan Safe Preview
+Leadership can select a Kingdom scan and validate it in the browser before any future import workflow.
+
+- Local file selection and structural validation.
+- Preview-only workflow.
+- No automatic database or Drive write.
+- Designed as the safe foundation for the future START / MIDDLE / END scan import flow.
+
+### KvK Management
+Leadership can prepare the next KvK from the BattleTrack Story Catalog.
+
+- KvK Number and KvK ID are generated from the existing `KvKs` sequence.
+- Story selection is loaded from the `KvK Stories` sheet.
+- Start date is entered by Leadership.
+- Planned End is automatically calculated as **Start + 50 days**.
+- Planned End remains editable and is **not** treated as a permanent actual end date.
+- Creating a KvK requires explicit confirmation before the row is written.
+
+The 50-day rule is intentionally a planning default only. BattleTrack does not automatically close a KvK when the planned date is reached.
 
 ---
 
@@ -205,6 +239,7 @@ The production database includes separate sources for:
 
 - Governors.
 - KvKs / Seasons.
+- KvK Stories / Story Catalog.
 - Snapshots.
 - Player Classification.
 - Requirements.
@@ -218,6 +253,25 @@ Season/story labels are data-driven.
 ---
 
 ## 🚧 Roadmap
+
+### KvK closing workflow
+A dedicated Leadership closing flow is planned on top of the v1.9.3 KvK Management foundation.
+
+Planned actions include:
+
+- **KvK Win**.
+- **KvK Lost**.
+- Manual KvK close.
+- Store the actual end date separately from the planned end date.
+- Use the actual end date as the final statistical cut-off when available.
+
+The planned Start + 50 days value remains only a default planning window.
+
+### Kingdom scan import
+The safe-preview workflow will be extended into a controlled import process with explicit KvK and snapshot-type selection (`START`, `MIDDLE`, `END`).
+
+### Leadership analytics
+Prepared roadmap items include Current KvK Overview, Comparison & Export and a later Emigration Review Worklist.
 
 ### Flag Filler Registry integration
 Time-aware Main ↔ Flag Filler integration is planned but intentionally deferred until sufficient live test cases are available.
@@ -251,21 +305,21 @@ It should **not** contain:
 
 ## 🏷️ Stable release
 
-### v1.8.0.5
+### v1.9.3
 Current verified stable baseline.
 
-Highlights:
-- Governor Battle Progress / Rolling-3.
-- DKP, KPR, KP and KILLS personal performance trends.
-- Rank change versus previous tracked KvK.
-- Collapsible Governor Trend.
-- Fully nested collapsible KvK History.
-- Responsive BattleTrack banner.
-- Cappy footer.
-- Compact collapsible navigation.
-- Full Kingdom Ranking performance optimizations retained.
+Highlights since v1.8.0.5:
+- Leadership Command Center foundation.
+- Server-side Admin authentication and short-lived session handling.
+- Kingdom Scan Safe Preview.
+- KvK Management backed by `KvKs` and `KvK Stories`.
+- Automatic next KvK Number / ID generation.
+- Story-driven Season name preview.
+- Planned End defaulted to **Start + 50 days**.
+- Planned End remains editable; no automatic KvK closure.
+- Existing player dashboard, rankings, trends and historical features retained.
 
-Future BattleTrack development should branch from **v1.8.0.5** unless a newer stable release supersedes it.
+Future BattleTrack development should branch from **v1.9.3** unless a newer stable release supersedes it.
 
 ---
 

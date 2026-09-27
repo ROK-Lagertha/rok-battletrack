@@ -649,4 +649,155 @@ document.addEventListener('keydown', function(event) {
   if (event.key === 'Escape') toggleBattletrackMenu(false);
 });
 
+
+
+// v1.9.0 - OP-047 Leadership Admin Center foundation
+let adminSessionToken = sessionStorage.getItem('btAdminSession') || '';
+
+function openAdminAccess(){
+  toggleBattletrackMenu(false);
+  if(adminSessionToken){
+    google.script.run.withSuccessHandler(function(result){
+      if(result && result.ok){ showAdminCenter(result.user); }
+      else { clearAdminSession(); openAdminLogin(); }
+    }).withFailureHandler(function(){ clearAdminSession(); openAdminLogin(); }).adminValidateSession(adminSessionToken);
+    return;
+  }
+  openAdminLogin();
+}
+function openAdminLogin(){
+  const modal=document.getElementById('adminLoginModal'); if(!modal)return;
+  modal.hidden=false; document.body.style.overflow='hidden';
+  const msg=document.getElementById('adminLoginMessage'); if(msg){msg.textContent='';msg.classList.remove('success');}
+  setTimeout(()=>{const u=document.getElementById('adminUsername');if(u)u.focus();},40);
+}
+function closeAdminLogin(){const modal=document.getElementById('adminLoginModal');if(modal)modal.hidden=true;document.body.style.overflow='';}
+function submitAdminLogin(){
+  const user=(document.getElementById('adminUsername')||{}).value||'';
+  const pass=(document.getElementById('adminPassword')||{}).value||'';
+  const btn=document.getElementById('adminLoginBtn'); const msg=document.getElementById('adminLoginMessage');
+  if(!user||!pass){if(msg)msg.textContent='Enter username and password.';return;}
+  if(btn){btn.disabled=true;btn.textContent='AUTHENTICATING…';} if(msg)msg.textContent='';
+  google.script.run.withSuccessHandler(function(result){
+    if(btn){btn.disabled=false;btn.textContent='LOGIN';}
+    if(result&&result.ok){adminSessionToken=result.token;sessionStorage.setItem('btAdminSession',adminSessionToken);closeAdminLogin();showAdminCenter(result.user);document.getElementById('adminPassword').value='';return;}
+    if(msg)msg.textContent=result&&result.code==='NOT_CONFIGURED'?'Admin access is not configured yet.':'Invalid username or password.';
+  }).withFailureHandler(function(){if(btn){btn.disabled=false;btn.textContent='LOGIN';}if(msg)msg.textContent='Admin login is temporarily unavailable.';}).adminLogin(user,pass);
+}
+function showAdminCenter(user){
+  const panel=document.getElementById('adminPanel');if(!panel)return;
+  panel.hidden=false; const b=document.getElementById('adminOpenBtn');if(b)b.classList.add('is-authenticated');
+  const label=document.getElementById('adminSessionLabel');if(label)label.textContent=user?('SIGNED IN · '+String(user).toUpperCase()):'SECURE SESSION';
+  panel.scrollIntoView({behavior:'smooth',block:'start'});
+}
+function logoutAdmin(){
+  const token=adminSessionToken; clearAdminSession(); const panel=document.getElementById('adminPanel');if(panel)panel.hidden=true;
+  if(token)google.script.run.adminLogout(token);
+}
+function clearAdminSession(){adminSessionToken='';sessionStorage.removeItem('btAdminSession');const b=document.getElementById('adminOpenBtn');if(b)b.classList.remove('is-authenticated');}
+document.addEventListener('keydown',function(e){if(e.key==='Escape'){const m=document.getElementById('adminLoginModal');if(m&&!m.hidden)closeAdminLogin();}if(e.key==='Enter'&&!document.getElementById('adminLoginModal')?.hidden)submitAdminLogin();});
+
+
+// v1.9.1 - OP-048 Kingdom Scan safe preview / validation
+function openScanUpload(){
+  if(!adminSessionToken){ openAdminAccess(); return; }
+  const modal=document.getElementById('scanUploadModal'); if(!modal)return;
+  modal.hidden=false; document.body.style.overflow='hidden';
+}
+function closeScanUpload(){
+  const modal=document.getElementById('scanUploadModal'); if(modal)modal.hidden=true;
+  document.body.style.overflow='';
+}
+function scanEscape(value){
+  return String(value==null?'':value).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});
+}
+function scanDelimiter(line){
+  const options=[',',';','\t']; let best=',', count=-1;
+  options.forEach(function(d){const n=(line.split(d).length-1);if(n>count){count=n;best=d;}}); return best;
+}
+function validateKingdomScan(file){
+  const box=document.getElementById('scanValidationResult'); if(!box||!file)return;
+  box.hidden=false; box.innerHTML='<div class="scan-working">VALIDATING SCAN…</div>';
+  const name=file.name||'Kingdom scan'; const ext=(name.split('.').pop()||'').toLowerCase();
+  const size=(file.size/1024/1024).toFixed(2);
+  if(!['csv','txt','xlsx'].includes(ext)){
+    box.innerHTML='<div class="scan-status bad">FILE NOT SUPPORTED</div><p>Use CSV, TXT or XLSX.</p>'; return;
+  }
+  if(ext==='xlsx'){
+    box.innerHTML='<div class="scan-status warn">FILE RECOGNIZED · STRUCTURE CHECK PENDING</div><div class="scan-file-meta"><strong>'+scanEscape(name)+'</strong><span>'+size+' MB · XLSX</span></div><p>The workbook is accepted for the future KvK5 import flow. This safe-preview build does not parse Excel workbook contents yet, so nothing is sent or stored.</p>'; return;
+  }
+  const reader=new FileReader();
+  reader.onerror=function(){box.innerHTML='<div class="scan-status bad">COULD NOT READ FILE</div>';};
+  reader.onload=function(){
+    const text=String(reader.result||'').replace(/^\uFEFF/,''); const lines=text.split(/\r?\n/).filter(function(x){return x.trim()!=='';});
+    if(!lines.length){box.innerHTML='<div class="scan-status bad">EMPTY FILE</div>';return;}
+    const delim=scanDelimiter(lines[0]); const headers=lines[0].split(delim).map(function(x){return x.trim().replace(/^"|"$/g,'');});
+    const sample=lines.slice(1,6).map(function(line){return line.split(delim);});
+    const consistent=sample.every(function(r){return r.length===headers.length;});
+    const normalized=headers.map(function(h){return h.toLowerCase().replace(/[^a-z0-9]/g,'');});
+    const governorHints=['governorid','governor','playerid','id'];
+    const hasId=normalized.some(function(h){return governorHints.includes(h);});
+    const status=consistent?'SCAN STRUCTURE READABLE':'CHECK COLUMN STRUCTURE';
+    box.innerHTML='<div class="scan-status '+(consistent?'good':'warn')+'">'+status+'</div><div class="scan-file-meta"><strong>'+scanEscape(name)+'</strong><span>'+size+' MB · '+lines.length.toLocaleString()+' rows · '+headers.length+' columns</span></div><div class="scan-check-grid"><div><span>HEADER</span><strong>'+headers.length+' detected</strong></div><div><span>ROWS</span><strong>'+Math.max(0,lines.length-1).toLocaleString()+' data rows</strong></div><div><span>GOVERNOR ID</span><strong>'+(hasId?'candidate found':'not confirmed')+'</strong></div><div><span>WRITE STATUS</span><strong>NO IMPORT</strong></div></div><div class="scan-columns"><span>Detected columns</span><p>'+headers.slice(0,14).map(scanEscape).join(' · ')+(headers.length>14?' · …':'')+'</p></div><p class="scan-preview-foot">Validation is intentionally non-destructive. Exact BattleTrack field mapping will be confirmed with the first real KvK5 scan.</p>';
+  };
+  reader.readAsText(file);
+}
+
+
+
+// v1.9.2 - OP-053 KvK Management / Story Catalog
+let kvkManagementState = null;
+function openKvkManagement(){
+  if(!adminSessionToken){ openAdminAccess(); return; }
+  const modal=document.getElementById('kvkManagementModal'); if(!modal)return;
+  modal.hidden=false; document.body.style.overflow='hidden';
+  const msg=document.getElementById('kvkManagementMessage'); if(msg)msg.textContent='';
+  const sel=document.getElementById('kvkStorySelect'); if(sel)sel.innerHTML='<option value="">Loading Story Catalog…</option>';
+  google.script.run.withSuccessHandler(function(result){
+    if(!result||!result.ok){ if(result&&result.code==='SESSION_EXPIRED'){clearAdminSession();closeKvkManagement();openAdminLogin();return;} if(msg)msg.textContent=(result&&result.message)||'KvK Management could not be loaded.'; return; }
+    kvkManagementState=result;
+    document.getElementById('kvkNextNumber').textContent='KvK '+result.nextNumber;
+    document.getElementById('kvkNextId').textContent=result.nextKvkId;
+    sel.innerHTML='<option value="">SELECT STORY</option>'+(result.stories||[]).map(function(st){return '<option value="'+esc(st.name)+'">'+esc(st.name)+'</option>';}).join('');
+    updateKvkSeasonPreview();
+  }).withFailureHandler(function(){if(msg)msg.textContent='KvK Management is temporarily unavailable.';}).adminGetKvkManagementData(adminSessionToken);
+}
+function closeKvkManagement(){const modal=document.getElementById('kvkManagementModal');if(modal)modal.hidden=true;document.body.style.overflow='';}
+function updateKvkPlannedEndDate(){
+  const startEl=document.getElementById('kvkStartDate');
+  const endEl=document.getElementById('kvkEndDate');
+  if(!startEl||!endEl)return;
+  const startDate=String(startEl.value||'').trim();
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(startDate)){endEl.value='';return;}
+  const parts=startDate.split('-').map(Number);
+  const d=new Date(Date.UTC(parts[0],parts[1]-1,parts[2]));
+  d.setUTCDate(d.getUTCDate()+50);
+  endEl.value=d.toISOString().slice(0,10);
+}
+function updateKvkSeasonPreview(){
+  const n=kvkManagementState&&kvkManagementState.nextNumber;
+  const story=(document.getElementById('kvkStorySelect')||{}).value||'';
+  const el=document.getElementById('kvkSeasonPreview'); if(el)el.textContent=(n&&story)?('Season '+n+' - '+story):'Select a story';
+}
+function createNewKvk(){
+  if(!adminSessionToken){closeKvkManagement();openAdminAccess();return;}
+  const story=(document.getElementById('kvkStorySelect')||{}).value||'';
+  const startDate=(document.getElementById('kvkStartDate')||{}).value||'';
+  const endDate=(document.getElementById('kvkEndDate')||{}).value||'';
+  const msg=document.getElementById('kvkManagementMessage'); const btn=document.getElementById('createKvkBtn');
+  if(!story||!startDate||!endDate){if(msg)msg.textContent='Please select a story and enter a KvK start date.';return;}
+  const preview=(document.getElementById('kvkSeasonPreview')||{}).textContent||story;
+  if(!confirm('Create '+preview+'?\n\nStart: '+startDate+'\nEnd: '+endDate+'\n\nThis will add the KvK to the BattleTrack database.'))return;
+  if(btn){btn.disabled=true;btn.textContent='CREATING…';} if(msg)msg.textContent='';
+  google.script.run.withSuccessHandler(function(result){
+    if(btn){btn.disabled=false;btn.textContent='CREATE KVK';}
+    if(!result||!result.ok){if(result&&result.code==='SESSION_EXPIRED'){clearAdminSession();closeKvkManagement();openAdminLogin();return;}if(msg)msg.textContent=(result&&result.message)||'KvK could not be created.';return;}
+    if(msg){msg.textContent=result.kvk.seasonName+' created successfully.';msg.classList.add('success');}
+    kvkManagementState.nextNumber=result.kvk.number+1; kvkManagementState.nextKvkId='3903-KVK'+(result.kvk.number+1);
+    document.getElementById('kvkNextNumber').textContent='KvK '+kvkManagementState.nextNumber;
+    document.getElementById('kvkNextId').textContent=kvkManagementState.nextKvkId;
+    document.getElementById('kvkStorySelect').value=''; document.getElementById('kvkStartDate').value=''; document.getElementById('kvkEndDate').value=''; updateKvkSeasonPreview();
+  }).withFailureHandler(function(){if(btn){btn.disabled=false;btn.textContent='CREATE KVK';}if(msg)msg.textContent='KvK could not be created.';}).adminCreateKvk(adminSessionToken,{story:story,startDate:startDate,endDate:endDate});
+}
+
 </script>

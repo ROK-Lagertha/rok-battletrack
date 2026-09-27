@@ -1,3 +1,33 @@
+# Changelog
+
+## v1.9.3 — 50-Day Planned End Automation
+- Planned KvK end date is automatically calculated as Start + 50 days.
+- The calculated end date remains editable before creation.
+- Backend fallback also calculates Start + 50 when no end date is supplied.
+- BattleTrack does not automatically close a KvK after 50 days.
+- Actual KvK close/result workflow remains a separate roadmap item.
+
+## v1.9.2 — OP-053 KvK Management
+- Added Leadership KvK Management modal.
+- Added automatic next KvK Number and `3903-KVK<n>` ID generation.
+- Added Story Catalog loading from the `KvK Stories` sheet.
+- Added data-driven Season name preview.
+- Added explicit confirmation before creating a new KvK.
+- `KvKs` remains the single source of truth for seasons.
+
+## v1.9.1 — OP-048 Kingdom Scan Safe Preview
+- Added Leadership Kingdom Scan upload/preview surface.
+- Added local structural validation and preview feedback.
+- Preview performs no database or Drive write.
+- Provides the safe foundation for a later controlled START / MIDDLE / END import flow.
+
+## v1.9.0 — OP-047 Leadership Admin Center Foundation
+- Added protected Admin navigation and Leadership Command Center.
+- Added server-side Admin login backed by Apps Script Script Properties.
+- Added short-lived Admin sessions via Apps Script cache.
+- Added logout and session validation.
+- Preserved separation between public player features and Leadership-only tools.
+
 ## v1.7.4 – OP-042 About BattleTrack
 - Added ABOUT BATTLETRACK action and responsive About panel.
 - Added concise project story plus Track / Understand / Compare pillars.
