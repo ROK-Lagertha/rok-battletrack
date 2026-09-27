@@ -1,5 +1,18 @@
 # Changelog
 
+## v1.5.0.1 — OP-039 Full Kingdom Ranking / Performance Hotfix
+- Added the complete Kingdom Ranking with historical KvK / Season selection.
+- Added full-list switching between DKP, KPR, KP and KILLS.
+- Reused the same tie and ranking rules as the personal Kingdom Ranking.
+- Added a mobile-friendly scrollable full-ranking view.
+- Performance hotfix: each Season dataset is loaded once, then ranking categories are sorted and cached client-side.
+- Eliminated repeated backend loading when switching DKP, KPR, KP and KILLS.
+
+## v1.5.0 — OP-039 Full Kingdom Ranking
+- Introduced the standalone Full Kingdom Ranking.
+- Added historical Season selection and complete governor ranking lists.
+- Added DKP, KPR, KP and KILLS category switching.
+
 ## v1.4.4.1 — OP-038 Collapsible Ranking Panel
 - Added a mobile-friendly collapsible Kingdom Ranking panel.
 - Ranking is collapsed by default and expands on demand with a compact header and chevron.

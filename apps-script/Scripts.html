@@ -1,6 +1,65 @@
 <script>
 const $ = id => document.getElementById(id);
 
+let fullRankingData=null;
+let fullRankingMetric='dkp';
+const fullRankingCache={};
+
+function toggleFullRanking(force){
+  const panel=$('fullRankingPanel');
+  const shouldOpen=force==null ? panel.hidden : !!force;
+  panel.hidden=!shouldOpen;
+  if(!shouldOpen) return;
+  panel.scrollIntoView({behavior:'smooth',block:'start'});
+  if(fullRankingData){ renderFullRanking(); return; }
+  $('fullRankingMeta').textContent='Loading Kingdom ranking…';
+  google.script.run
+    .withSuccessHandler(data=>{
+      if(!data?.success){ $('fullRankingMeta').textContent='Kingdom ranking could not be loaded.'; return; }
+      fullRankingData=data;
+      const select=$('fullRankingSeason');
+      select.innerHTML=(data.seasons||[]).map(s=>`<option value="${esc(s.kvkId)}">${esc(s.seasonName)}</option>`).join('');
+      renderFullRanking();
+    })
+    .withFailureHandler(err=>{ $('fullRankingMeta').textContent=err?.message||'Kingdom ranking could not be loaded.'; })
+    .getKingdomRankingData();
+}
+
+function renderFullRanking(){
+  if(!fullRankingData) return;
+  const select=$('fullRankingSeason');
+  const season=(fullRankingData.seasons||[]).find(s=>s.kvkId===select.value) || fullRankingData.seasons?.[0];
+  if(!season) return;
+  const labels={dkp:'DKP',kpr:'KPR',kp:'KP',kills:'KILLS'};
+  const cacheKey=season.kvkId+'|'+fullRankingMetric;
+  let cached=fullRankingCache[cacheKey];
+  if(!cached){
+    const ordered=(season.players||[]).slice().sort((a,b)=>{
+      const diff=Number(b[fullRankingMetric]||0)-Number(a[fullRankingMetric]||0);
+      return diff!==0 ? diff : String(a.governorId).localeCompare(String(b.governorId));
+    });
+    let lastValue=null,lastRank=0;
+    const rows=ordered.map((player,index)=>{
+      const metricValue=Number(player[fullRankingMetric]||0);
+      if(lastValue===null || metricValue!==lastValue){ lastRank=index+1; lastValue=metricValue; }
+      return {governorId:player.governorId,governorName:player.governorName,rank:lastRank,value:metricValue};
+    });
+    cached=fullRankingCache[cacheKey]=rows.map(row=>{
+      const value=fullRankingMetric==='kpr' ? (Number(row.value||0)*100).toFixed(2)+'%' : num(row.value);
+      return `<tr><td class="full-rank">#${num(row.rank)}</td><td><strong>${esc(row.governorName)}</strong><small>ID ${esc(row.governorId)}</small></td><td class="full-value">${value}</td></tr>`;
+    }).join('');
+  }
+  $('fullRankingValueHead').textContent=labels[fullRankingMetric];
+  $('fullRankingMeta').textContent=`${season.seasonName} · ${num(season.total)} Governors`;
+  $('fullRankingBody').innerHTML=cached;
+  document.querySelectorAll('.full-ranking-tab').forEach(btn=>btn.classList.toggle('active',btn.dataset.fullRanking===fullRankingMetric));
+}
+
+document.addEventListener('click',e=>{
+  const btn=e.target.closest('.full-ranking-tab');
+  if(btn){ fullRankingMetric=btn.dataset.fullRanking; renderFullRanking(); }
+});
+
 function searchGovernor(){
   const id = $('governorId').value.trim();
   const btn = $('searchBtn');

@@ -14,7 +14,7 @@
 
 const BT = {
 
-  VERSION: '1.4.0',
+  VERSION: '1.5.0',
 
   KINGDOM: 3903,
 
@@ -83,6 +83,59 @@ function include_(filename) {
  */
 function getPlayerData(governorId) {
   return getPlayerData_(governorId);
+}
+
+
+/**
+ * Full Kingdom Ranking for all tracked KvKs / Seasons.
+ * Client-callable via google.script.run.
+ */
+function getKingdomRankingData() {
+  const ss = getDatabase_();
+  const kvkSheet = ss.getSheetByName(BT.SHEETS.KVKS);
+  const resultSheet = ss.getSheetByName(BT.SHEETS.RESULTS);
+  if (!kvkSheet || !resultSheet) throw new Error('Required BattleTrack ranking sheets are missing.');
+
+  const kvks = sheetToObjects_(kvkSheet);
+  const results = sheetToObjects_(resultSheet);
+  const byKvk = {};
+
+  results.forEach(row => {
+    const kvkId = String(row['KvK ID'] || '').trim();
+    const governorId = normalizeId_(row['Governor ID']);
+    if (!kvkId || !governorId) return;
+    const deads = Number(row['KvK Deads']) || 0;
+    const t4 = Number(row['KvK T4 Kills']) || 0;
+    const t5 = Number(row['KvK T5 Kills']) || 0;
+    const kp = Number(row['KvK Kill Points']) || 0;
+    const startPower = Number(row['Start Power']) || 0;
+    if (!byKvk[kvkId]) byKvk[kvkId] = [];
+    byKvk[kvkId].push({
+      governorId: governorId,
+      governorName: String(row['Governor Name'] || '').trim() || ('Governor ' + governorId),
+      dkp: (deads * 10) + (t4 * 5) + (t5 * 15),
+      kp: kp,
+      kills: t4 + t5,
+      kpr: startPower > 0 ? kp / startPower : 0
+    });
+  });
+
+  // v1.5.0.1: return each player only once. Ranking/sorting happens in the
+  // browser, avoiding four duplicated ranking arrays in every response.
+  const seasons = kvks.map(kvk => {
+    const kvkId = String(kvk['KvK ID'] || '').trim();
+    const players = byKvk[kvkId] || [];
+    return {
+      kvkId: kvkId,
+      number: numberOrNull_(kvk['KvK Number']),
+      seasonName: String(kvk['Season Name'] || '').trim() || ('KvK ' + (kvk['KvK Number'] || '')),
+      status: String(kvk['Status'] || '').trim(),
+      total: players.length,
+      players: players
+    };
+  }).filter(x => x.kvkId && x.total > 0).sort((a,b) => numberForSort_(b.number)-numberForSort_(a.number));
+
+  return { success:true, kingdom:BT.KINGDOM, seasons:seasons };
 }
 
 

@@ -26,11 +26,38 @@
                  placeholder="Governor ID">
           <button id="searchBtn" onclick="searchGovernor()">VIEW MY STATS</button>
         </div>
+        <button id="fullRankingBtn" class="secondary-action" type="button" onclick="toggleFullRanking()">VIEW KINGDOM RANKING</button>
         <div id="message" class="message"></div>
       </section>
 
       <div class="hero-divider"><span>◆</span></div>
     </header>
+
+    <section id="fullRankingPanel" class="panel full-ranking-panel" hidden>
+      <div class="section-head full-ranking-head">
+        <div>
+          <div class="kicker">KINGDOM 3903</div>
+          <h3>Full Kingdom Ranking</h3>
+        </div>
+        <button type="button" class="ranking-close" onclick="toggleFullRanking(false)" aria-label="Close Kingdom Ranking">×</button>
+      </div>
+      <div class="full-ranking-controls">
+        <label>SEASON<select id="fullRankingSeason" onchange="renderFullRanking()"></select></label>
+        <div class="ranking-tabs" role="group" aria-label="Full ranking category">
+          <button type="button" class="ranking-tab full-ranking-tab active" data-full-ranking="dkp">DKP</button>
+          <button type="button" class="ranking-tab full-ranking-tab" data-full-ranking="kpr">KPR</button>
+          <button type="button" class="ranking-tab full-ranking-tab" data-full-ranking="kp">KP</button>
+          <button type="button" class="ranking-tab full-ranking-tab" data-full-ranking="kills">KILLS</button>
+        </div>
+      </div>
+      <div id="fullRankingMeta" class="full-ranking-meta">—</div>
+      <div class="full-ranking-table-wrap">
+        <table class="full-ranking-table">
+          <thead><tr><th>RANK</th><th>GOVERNOR</th><th id="fullRankingValueHead">DKP</th></tr></thead>
+          <tbody id="fullRankingBody"></tbody>
+        </table>
+      </div>
+    </section>
 
     <main id="dashboard" hidden>
       <section class="player-card">
