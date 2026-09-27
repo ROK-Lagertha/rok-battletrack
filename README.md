@@ -1,6 +1,6 @@
 # ⚔️ ROK BattleTrack – Kingdom 3903
 
-**Current stable release: v1.7.1.1**
+**Current stable release: v1.7.4**
 
 ROK BattleTrack is a mobile-first **Rise of Kingdoms performance and analytics dashboard for Kingdom 3903**. It turns tracked KvK data from Google Sheets into a fast Google Apps Script WebApp where governors can review their own combat performance, requirements, historical KvKs, rankings and Kingdom-wide development.
 
@@ -114,6 +114,16 @@ Positive/negative visual changes describe an **increase or decrease**, not autom
 - Rank = `1 + number of governors with a strictly higher value`.
 - Top-% / Ahead-of position uses governors with strictly lower values only, so ties do not inflate percentile position.
 
+
+## 📖 Player guidance
+BattleTrack includes three lightweight help layers without cluttering the main dashboard:
+
+- **How It Works** — a five-step journey from Governor ID to Battle Archive.
+- **Player FAQ** — a single-open accordion covering data sources, classifications, requirements, statuses, rankings and historical behavior.
+- **About BattleTrack** — the project story and its three pillars: **Track · Understand · Compare**.
+
+The help areas are designed mobile-first and do not change ranking or backend calculations.
+
 ## 🏗️ Architecture
 
 `Google Sheets → Google Apps Script backend → BattleTrack WebApp`
@@ -131,9 +141,6 @@ BattleTrack uses a Kingdom 3903 visual identity built around deep black/navy sur
 
 ## 🗺️ Roadmap
 Planned ideas include:
-- Player FAQ.
-- About BattleTrack.
-- How It Works / data-flow explanation.
 - Rank change between KvKs.
 - Time-aware Flag Filler Registry integration.
 - Further mobile hero / keyvisual optimization.
@@ -145,3 +152,7 @@ This public repository is intended for BattleTrack source code and project docum
 ---
 
 Built for **Kingdom 3903**. ⚔️
+
+
+## v1.7.4 – OP-042 About BattleTrack
+Adds an About BattleTrack panel explaining the purpose, evolution and three core pillars of BattleTrack for Kingdom 3903.

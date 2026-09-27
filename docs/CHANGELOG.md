@@ -1,4 +1,29 @@
+## v1.7.4 – OP-042 About BattleTrack
+- Added ABOUT BATTLETRACK action and responsive About panel.
+- Added concise project story plus Track / Understand / Compare pillars.
+- Preserved v1.7.2.1 ranking performance cache and existing backend behavior.
+
 # Changelog
+
+## v1.7.3 — OP-043 How It Works
+- Added a mobile-first five-step BattleTrack Journey: Governor ID → Battle Profile → Requirements → Kingdom Ranking → Battle Archive.
+- Added a Data Source note clarifying that BattleTrack uses prepared Kingdom 3903 tracking data and does not read a player’s RoK account directly.
+- Preserved the v1.7.2.1 ranking performance cache and backend behavior.
+
+## v1.7.2 — OP-040 Player FAQ
+- Added the Player FAQ help panel.
+- Added explanations for BattleTrack data, classifications, requirements, statuses, ranking metrics, ties, Top-%, ranking population, historical classification and Rolling-3 behavior.
+
+## v1.7.2.1 — OP-040 Player FAQ UI Hotfix
+- Changed the Player FAQ to a single-open accordion.
+- Opening a new question automatically closes the previously open question.
+- The currently open question can still be closed by tapping it again.
+
+## v1.7.1.2 — Full Ranking Performance Hotfix
+- Precomputes and caches all Season/metric ranking views immediately after the ranking payload loads.
+- Metric switches reuse cached markup and no longer repeat sorting/rank calculation.
+- Preserves ranking table scroll position during DKP/KPR/KP/KILLS switching.
+- Avoids redundant rerender when the already-active metric is selected.
 
 ## v1.7.1.1 — OP-041 Ranking Metrics Explanation / UI Hotfix
 - Added contextual metric explanations to personal and Full Kingdom Ranking.

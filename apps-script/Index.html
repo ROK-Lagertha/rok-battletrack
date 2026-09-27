@@ -26,7 +26,7 @@
                  placeholder="Governor ID">
           <button id="searchBtn" onclick="searchGovernor()">VIEW MY STATS</button>
         </div>
-        <div class="kingdom-actions"><button id="fullRankingBtn" class="secondary-action" type="button" onclick="toggleFullRanking()">VIEW KINGDOM RANKING</button><button id="kingdomStatsBtn" class="secondary-action" type="button" onclick="toggleKingdomStats()">VIEW KINGDOM STATS</button></div>
+        <div class="kingdom-actions"><button id="fullRankingBtn" class="secondary-action" type="button" onclick="toggleFullRanking()">VIEW KINGDOM RANKING</button><button id="kingdomStatsBtn" class="secondary-action" type="button" onclick="toggleKingdomStats()">VIEW KINGDOM STATS</button><button id="howItWorksBtn" class="secondary-action" type="button" onclick="toggleHowItWorks()">HOW IT WORKS</button><button id="aboutBtn" class="secondary-action" type="button" onclick="toggleAbout()">ABOUT BATTLETRACK</button><button id="faqBtn" class="secondary-action" type="button" onclick="toggleFaq()">PLAYER FAQ</button></div>
         <div id="message" class="message"></div>
       </section>
 
@@ -79,6 +79,64 @@
       <div class="kingdom-progress-divider"><span>KINGDOM PROGRESS</span></div>
       <div class="kingdom-progress-intro">Season-to-season development across all tracked Kingdom 3903 KvKs.</div>
       <div id="kingdomProgressGrid" class="kingdom-progress-grid"></div>
+    </section>
+
+
+    <section id="howItWorksPanel" class="panel how-it-works-panel" hidden>
+      <div class="section-head how-it-works-head">
+        <div><div class="kicker">BATTLETRACK JOURNEY</div><h3>How It Works</h3></div>
+        <button type="button" class="ranking-close" onclick="toggleHowItWorks(false)" aria-label="Close How It Works">×</button>
+      </div>
+      <p class="how-it-works-intro">From Governor ID to your complete BattleTrack view in five steps.</p>
+      <div class="journey-grid">
+        <article class="journey-step"><span class="journey-number">01</span><div><strong>Enter Governor ID</strong><p>BattleTrack finds your Governor in Kingdom 3903's tracked KvK data.</p></div></article>
+        <article class="journey-step"><span class="journey-number">02</span><div><strong>Battle Profile</strong><p>Review your latest KvK performance, Power, Kills, Deads and Classification.</p></div></article>
+        <article class="journey-step"><span class="journey-number">03</span><div><strong>Requirements</strong><p>See your Kill and Dead progress plus PASS, NOT MET or IN PROGRESS status.</p></div></article>
+        <article class="journey-step"><span class="journey-number">04</span><div><strong>Kingdom Ranking</strong><p>Compare DKP, KPR, KP and KILLS with Rank, Top-% position and Ranking Neighborhood.</p></div></article>
+        <article class="journey-step"><span class="journey-number">05</span><div><strong>Battle Archive</strong><p>Open earlier KvKs to review historical performance and requirement results.</p></div></article>
+      </div>
+      <div class="journey-note"><strong>DATA SOURCE</strong><span>BattleTrack uses prepared Kingdom 3903 tracking data. It does not access or read your Rise of Kingdoms account directly.</span></div>
+    </section>
+
+    <section id="aboutPanel" class="panel about-panel" hidden>
+      <div class="section-head about-head">
+        <div><div class="kicker">KINGDOM 3903 • BUILT FOR THE FIGHT</div><h3>About BattleTrack</h3></div>
+        <button type="button" class="ranking-close" onclick="toggleAbout(false)" aria-label="Close About BattleTrack">×</button>
+      </div>
+      <div class="about-layout">
+        <div class="about-story">
+          <p class="about-lead">BattleTrack turns Kingdom 3903's KvK tracking data into a clear battle profile for every Governor.</p>
+          <p>What started as a simple Governor lookup grew into a Kingdom-wide performance dashboard: personal KvK results, requirements, historical progress, rankings and Kingdom analytics in one place.</p>
+          <p>The goal is simple: make tracked performance easier to understand without digging through spreadsheets, calculations or old KvK records.</p>
+        </div>
+        <div class="about-pillars">
+          <article><span>01</span><div><strong>TRACK</strong><p>Bring relevant KvK performance data together in one profile.</p></div></article>
+          <article><span>02</span><div><strong>UNDERSTAND</strong><p>Turn raw numbers into requirements, progress and useful context.</p></div></article>
+          <article><span>03</span><div><strong>COMPARE</strong><p>See personal results alongside the wider Kingdom 3903 battlefield.</p></div></article>
+        </div>
+      </div>
+      <div class="about-signature"><span>⚔</span><div><strong>BUILT FOR KINGDOM 3903</strong><small>From battlefield data to battle intelligence.</small></div><span>⚔</span></div>
+    </section>
+
+    <section id="faqPanel" class="panel faq-panel" hidden>
+      <div class="section-head faq-head">
+        <div><div class="kicker">BATTLETRACK HELP</div><h3>Player FAQ</h3></div>
+        <button type="button" class="ranking-close" onclick="toggleFaq(false)" aria-label="Close Player FAQ">×</button>
+      </div>
+      <p class="faq-intro">Quick answers to the most common questions about BattleTrack, requirements and rankings.</p>
+      <div class="faq-list">
+        <details><summary>What is ROK BattleTrack?</summary><p>BattleTrack is Kingdom 3903's player performance dashboard. Enter your Governor ID to review tracked KvK performance, requirements, historical results and Kingdom ranking data.</p></details>
+        <details><summary>Where does my BattleTrack data come from?</summary><p>BattleTrack uses Kingdom 3903's tracked KvK data. The WebApp reads prepared BattleTrack results and calculations from the Kingdom database; it does not read your game account directly.</p></details>
+        <details><summary>What do Regular and Flag Filler mean?</summary><p>Classification determines which KvK requirements apply to a Governor. Regular players use the configured Regular requirements. Flag Fillers can have a different requirement set based on their Kingdom role.</p></details>
+        <details><summary>How are my requirements calculated?</summary><p>BattleTrack compares your tracked KvK results with the requirement values configured for that KvK and classification. Kill and Dead progress are shown separately, together with an overall progress view.</p></details>
+        <details><summary>What do PASS, NOT MET and IN PROGRESS mean?</summary><p><strong>PASS</strong> means the configured requirements were achieved. <strong>NOT MET</strong> means the completed KvK result did not reach the required threshold. <strong>IN PROGRESS</strong> is used while the tracked KvK is still ongoing.</p></details>
+        <details><summary>What are DKP, KPR, KP and KILLS?</summary><p><strong>DKP</strong> = Deads × 10 + T4 Kills × 5 + T5 Kills × 15. <strong>KPR</strong> = KvK Kill Points ÷ Start Power and is displayed as a percentage. <strong>KP</strong> means KvK Kill Points. <strong>KILLS</strong> means T4 + T5 Kills. You can also use the ⓘ button directly in the ranking panels.</p></details>
+        <details><summary>How do ranking ties work?</summary><p>Governors with the same metric value receive the same rank. The next rank is based on how many Governors have a strictly higher value, so tied players share their position.</p></details>
+        <details><summary>What does “Ahead of …% of Governors” mean?</summary><p>It shows the share of tracked Governors with a strictly lower value in the selected ranking metric. Governors tied with you are not counted as being behind you.</p></details>
+        <details><summary>Who is included in the Kingdom Ranking?</summary><p>All Governors present in the selected KvK's BattleTrack results are included, including Regulars, Flag Fillers, farms and Governors with zero values.</p></details>
+        <details><summary>Why can historical values or classifications differ?</summary><p>BattleTrack evaluates each KvK using the data and requirement context associated with that KvK. Current player status should not automatically be treated as historical status.</p></details>
+        <details><summary>Why does Kingdom Progress show only three KvKs?</summary><p>Kingdom Progress intentionally uses a rolling three-KvK view. When a new KvK is added, the oldest one drops out so the dashboard stays compact and focuses on recent development.</p></details>
+      </div>
     </section>
 
     <main id="dashboard" hidden>
