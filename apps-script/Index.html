@@ -26,7 +26,7 @@
                  placeholder="Governor ID">
           <button id="searchBtn" onclick="searchGovernor()">VIEW MY STATS</button>
         </div>
-        <button id="fullRankingBtn" class="secondary-action" type="button" onclick="toggleFullRanking()">VIEW KINGDOM RANKING</button>
+        <div class="kingdom-actions"><button id="fullRankingBtn" class="secondary-action" type="button" onclick="toggleFullRanking()">VIEW KINGDOM RANKING</button><button id="kingdomStatsBtn" class="secondary-action" type="button" onclick="toggleKingdomStats()">VIEW KINGDOM STATS</button></div>
         <div id="message" class="message"></div>
       </section>
 
@@ -48,6 +48,7 @@
           <button type="button" class="ranking-tab full-ranking-tab" data-full-ranking="kpr">KPR</button>
           <button type="button" class="ranking-tab full-ranking-tab" data-full-ranking="kp">KP</button>
           <button type="button" class="ranking-tab full-ranking-tab" data-full-ranking="kills">KILLS</button>
+          <button type="button" class="metric-info-btn" onclick="showMetricInfo(event, 'full')" aria-label="Explain selected ranking metric" title="Explain metric">ⓘ</button>
         </div>
       </div>
       <div id="fullRankingMeta" class="full-ranking-meta">—</div>
@@ -57,6 +58,27 @@
           <tbody id="fullRankingBody"></tbody>
         </table>
       </div>
+    </section>
+
+
+    <section id="kingdomStatsPanel" class="panel kingdom-stats-panel" hidden>
+      <div class="section-head kingdom-stats-head">
+        <div><div class="kicker">KINGDOM 3903</div><h3>Kingdom KvK Statistics</h3></div>
+        <button type="button" class="ranking-close" onclick="toggleKingdomStats(false)" aria-label="Close Kingdom Statistics">×</button>
+      </div>
+      <div class="kingdom-stats-controls"><label>SEASON<select id="kingdomStatsSeason" onchange="renderKingdomStats()"></select></label></div>
+      <div id="kingdomStatsMeta" class="full-ranking-meta">—</div>
+      <div class="kingdom-stats-grid">
+        <article class="kingdom-stat"><span>TOTAL KP</span><strong id="kingdomTotalKp">—</strong></article>
+        <article class="kingdom-stat"><span>TOTAL KILLS</span><strong id="kingdomTotalKills">—</strong><small>T4 + T5</small></article>
+        <article class="kingdom-stat"><span>TOTAL DEADS</span><strong id="kingdomTotalDeads">—</strong></article>
+        <article class="kingdom-stat"><span>TRACKED GOVERNORS</span><strong id="kingdomTrackedGovernors">—</strong></article>
+      </div>
+      <div class="kingdom-stats-note">Kingdom totals are aggregated from BattleTrack KvK Results for the selected Season.</div>
+
+      <div class="kingdom-progress-divider"><span>KINGDOM PROGRESS</span></div>
+      <div class="kingdom-progress-intro">Season-to-season development across all tracked Kingdom 3903 KvKs.</div>
+      <div id="kingdomProgressGrid" class="kingdom-progress-grid"></div>
     </section>
 
     <main id="dashboard" hidden>
@@ -122,6 +144,7 @@
                 <button type="button" class="ranking-tab" data-ranking="kpr">KPR</button>
                 <button type="button" class="ranking-tab" data-ranking="kp">KP</button>
                 <button type="button" class="ranking-tab" data-ranking="kills">KILLS</button>
+                <button type="button" class="metric-info-btn" onclick="showMetricInfo(event, 'personal')" aria-label="Explain selected ranking metric" title="Explain metric">ⓘ</button>
               </div>
             </div>
             <div class="dkp-rank-line"><strong id="dkpRank">—</strong><span id="dkpTotal">of — Governors</span></div>
@@ -149,6 +172,13 @@
     </main>
 
     <footer>ROK BATTLETRACK · KINGDOM 3903</footer>
+  </div>
+
+  <div id="metricInfoPopover" class="metric-info-popover" hidden role="dialog" aria-live="polite">
+    <button type="button" class="metric-info-close" onclick="closeMetricInfo()" aria-label="Close metric explanation">×</button>
+    <div id="metricInfoTitle" class="metric-info-title">DKP</div>
+    <div id="metricInfoText" class="metric-info-text"></div>
+    <div id="metricInfoFormula" class="metric-info-formula"></div>
   </div>
   <?!= include_('Scripts'); ?>
 </body>

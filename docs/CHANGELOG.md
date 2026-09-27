@@ -1,5 +1,26 @@
 # Changelog
 
+## v1.7.1.1 — OP-041 Ranking Metrics Explanation / UI Hotfix
+- Added contextual metric explanations to personal and Full Kingdom Ranking.
+- Added explanations for DKP, KPR, KP and KILLS, including formulas where applicable.
+- Added mobile-friendly tap / desktop click behavior.
+- UI hotfix changed the information control to a compact circular gold button.
+
+## v1.7.0 — OP-045 Kingdom KvK Progress & Trends
+- Added Kingdom-wide season-to-season trend visualization.
+- Added trend views for Total KP, Total Kills, Total Deads and Tracked Governors.
+- Added percentage change compared with the previous displayed KvK.
+- Established the permanent **Rolling-3 rule**: only the latest three KvKs are compared at once.
+- Positive/negative change styling represents increase/decrease and is not automatically a performance judgment.
+
+## v1.6.0.1 — OP-044 Kingdom KvK Statistics Dashboard / Hotfix
+- Added the Kingdom KvK Statistics dashboard.
+- Added historical Season selection.
+- Added aggregated Total KP, Total Kills (T4 + T5), Total Deads and Tracked Governors.
+- Aggregations are calculated from BattleTrack `KvK Results` data.
+- RSS statistics remain deferred until a reliable data source is available.
+- v1.6.0.1 fixed the stylesheet/template structure from the initial v1.6.0 build.
+
 ## v1.5.0.1 — OP-039 Full Kingdom Ranking / Performance Hotfix
 - Added the complete Kingdom Ranking with historical KvK / Season selection.
 - Added full-list switching between DKP, KPR, KP and KILLS.
@@ -15,48 +36,30 @@
 
 ## v1.4.4.1 — OP-038 Collapsible Ranking Panel
 - Added a mobile-friendly collapsible Kingdom Ranking panel.
-- Ranking is collapsed by default and expands on demand with a compact header and chevron.
-- Preserved the existing gold/dark gradient styling.
-- Expanded panel retains DKP, KPR, KP and KILLS tabs, personal rank, Top-% position and Ranking Neighborhood.
-- Built without changing the stable ranking JavaScript logic.
+- Ranking is collapsed by default and expands on demand.
+- Preserved the existing ranking features and styling.
 
-## v1.4.3 – OP-033 Ranking Neighborhood
-- Added dynamic 3-above / current player / 3-below ranking neighborhood for DKP, KPR, KP and KILLS.
-- Neighborhood follows the active ranking tab and highlights the current governor.
+## v1.4.3 — OP-033 Ranking Neighborhood
+- Added dynamic nearby ranking positions around the current governor.
+- Displays up to three governors above and three below.
 
-## v1.4.2 — OP-032 Personal Rank + Top-% Position
-- Added a dynamic “Ahead of X% of Governors” indicator to the Kingdom Ranking card.
-- The percentage updates with DKP, KPR, KP and KILLS.
-- Ties are handled from the underlying score population: only governors with a strictly lower score count as being behind the player.
+## v1.4.2 — OP-032 Personal Rank & Top-% Position
+- Added personal Kingdom rank.
+- Added Ahead-of percentile position using strictly lower values.
 
-## v1.4.1.3 — Stable
-- OP-034 completed: interactive Kingdom Ranking category switcher.
-- Final category order: **DKP | KPR | KP | KILLS**.
-- KPR is displayed as a percentage while preserving the underlying ranking calculation.
-- Current Season information hierarchy changed to **Stats → Requirements → Kingdom Ranking**.
-- Ranking changes instantly without reloading the governor profile.
+## v1.4.1.3 — OP-034 Ranking Categories
+- Added DKP, KPR, KP and KILLS ranking categories.
+- Added percentage display for KPR.
+- Finalized Current Season information order: Stats → Requirements → Kingdom Ranking.
 
-## v1.4.1.2
-- Ranking switcher compatibility hotfix.
-- Preserved v1.4.0 DKP payload fields as fallback.
-- Ranking tabs can be restored dynamically if older cached card markup is present.
+## v1.4.0 — OP-031 DKP Kingdom Ranking
+- Introduced the personal Kingdom DKP Ranking.
 
-## v1.4.1
-- OP-034: interactive ranking switcher introduced.
-- Categories: DKP, KP, KILLS and KPR.
-- KILLS = T4 + T5; KPR = KvK Kill Points / Start Power.
-- Equal values share the same rank.
+## v1.3.2 — OP-030 Battle Archive UX
+- Added single-open archive accordion behavior.
+- Prioritized the latest three KvKs with older history available on demand.
+- Added achieved/target and remaining/completed requirement information.
 
-## v1.4.0
-- OP-031: Kingdom DKP Ranking added to Current Season.
-- DKP calculated dynamically from KvK Results.
-- Formula: Deads × 10 + T4 × 5 + T5 × 15.
-- All governors in each KvK Results population are ranked.
-- Equal DKP values share the same rank.
-- Ranking payload prepared per KvK for later Top-% and ranking-neighborhood features.
-
-## v1.3.2
-- Battle Archive single-open accordion.
-- Last 3 KvKs shown by default; older KvKs can be expanded.
-- Requirement achieved/target and remaining/completed display.
-- Overall Progress alignment hotfix.
+## v1.3.0 — OP-027 / OP-029 Governor Profile & Battle Archive
+- Added the Governor Battle Profile.
+- Added interactive historical KvK archive.

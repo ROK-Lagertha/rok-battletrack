@@ -4,6 +4,65 @@ const $ = id => document.getElementById(id);
 let fullRankingData=null;
 let fullRankingMetric='dkp';
 const fullRankingCache={};
+let kingdomStatsData=null;
+
+function toggleKingdomStats(force){
+  const panel=$('kingdomStatsPanel');
+  const shouldOpen=force==null ? panel.hidden : !!force;
+  panel.hidden=!shouldOpen;
+  if(!shouldOpen) return;
+  panel.scrollIntoView({behavior:'smooth',block:'start'});
+  if(kingdomStatsData){ renderKingdomStats(); return; }
+  $('kingdomStatsMeta').textContent='Loading Kingdom statistics…';
+  google.script.run
+    .withSuccessHandler(data=>{
+      if(!data?.success){ $('kingdomStatsMeta').textContent='Kingdom statistics could not be loaded.'; return; }
+      kingdomStatsData=data;
+      $('kingdomStatsSeason').innerHTML=(data.seasons||[]).map(s=>`<option value="${esc(s.kvkId)}">${esc(s.seasonName)}</option>`).join('');
+      renderKingdomStats();
+    })
+    .withFailureHandler(err=>{ $('kingdomStatsMeta').textContent=err?.message||'Kingdom statistics could not be loaded.'; })
+    .getKingdomStatsData();
+}
+
+function renderKingdomStats(){
+  if(!kingdomStatsData) return;
+  const select=$('kingdomStatsSeason');
+  const season=(kingdomStatsData.seasons||[]).find(s=>s.kvkId===select.value) || kingdomStatsData.seasons?.[0];
+  if(!season) return;
+  $('kingdomStatsMeta').textContent=`${season.seasonName}${season.status?' · '+season.status:''}`;
+  $('kingdomTotalKp').textContent=num(season.totalKp);
+  $('kingdomTotalKills').textContent=num(season.totalKills);
+  $('kingdomTotalDeads').textContent=num(season.totalDeads);
+  $('kingdomTrackedGovernors').textContent=num(season.trackedGovernors);
+  renderKingdomProgress();
+}
+
+function renderKingdomProgress(){
+  if(!kingdomStatsData) return;
+  const seasons=(kingdomStatsData.seasons||[]).slice().sort((a,b)=>(Number(a.number)||0)-(Number(b.number)||0));
+  const metrics=[
+    {key:'totalKp',label:'TOTAL KP'},
+    {key:'totalKills',label:'TOTAL KILLS'},
+    {key:'totalDeads',label:'TOTAL DEADS'},
+    {key:'trackedGovernors',label:'TRACKED GOVERNORS'}
+  ];
+  const grid=$('kingdomProgressGrid');
+  if(!grid) return;
+  grid.innerHTML=metrics.map(metric=>{
+    const max=Math.max(...seasons.map(s=>Number(s[metric.key])||0),1);
+    const points=seasons.map((s,i)=>{
+      const value=Number(s[metric.key])||0;
+      const prev=i?Number(seasons[i-1][metric.key])||0:null;
+      const pct=prev===null?null:(prev===0?(value===0?0:null):((value-prev)/prev)*100);
+      const delta=pct===null?'BASELINE':`${pct>=0?'+':''}${pct.toFixed(1)}%`;
+      const cls=pct===null?'neutral':pct>0?'up':pct<0?'down':'neutral';
+      const height=Math.max(8,(value/max)*100);
+      return `<div class="progress-season"><div class="progress-bar-wrap"><div class="progress-bar" style="height:${height}%"></div></div><strong>${num(value)}</strong><span>${esc(s.seasonName)}</span><em class="${cls}">${delta}</em></div>`;
+    }).join('');
+    return `<article class="progress-card"><div class="progress-card-title">${metric.label}</div><div class="progress-seasons">${points}</div></article>`;
+  }).join('');
+}
 
 function toggleFullRanking(force){
   const panel=$('fullRankingPanel');
@@ -369,4 +428,36 @@ function signed(v){
 function esc(v){
   return String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
+
+
+const metricInfoContent={
+  dkp:{title:'DKP · Dead & Kill Points',text:'BattleTrack performance score combining combat losses and high-tier kills.',formula:'Formula: (Deads × 10) + (T4 Kills × 5) + (T5 Kills × 15)'},
+  kpr:{title:'KPR · Kill Points Ratio',text:'Shows KvK Kill Points in relation to the Governor’s Start Power. BattleTrack displays the ratio as a percentage.',formula:'Formula: KvK Kill Points ÷ Start Power × 100'},
+  kp:{title:'KP · Kill Points',text:'Total Kill Points gained by the Governor during the selected KvK.',formula:'Value: KvK Kill Points'},
+  kills:{title:'KILLS · T4 + T5',text:'Total high-tier troop kills gained during the selected KvK.',formula:'Formula: T4 Kills + T5 Kills'}
+};
+
+function showMetricInfo(event,scope){
+  event.preventDefault();
+  event.stopPropagation();
+  const metric=scope==='full' ? fullRankingMetric : (typeof activeRankingMetric!=='undefined' ? activeRankingMetric : 'dkp');
+  const info=metricInfoContent[metric]||metricInfoContent.dkp;
+  const pop=$('metricInfoPopover');
+  $('metricInfoTitle').textContent=info.title;
+  $('metricInfoText').textContent=info.text;
+  $('metricInfoFormula').textContent=info.formula;
+  pop.hidden=false;
+  if(window.innerWidth>760){
+    const r=event.currentTarget.getBoundingClientRect();
+    const width=340;
+    const left=Math.max(14,Math.min(window.innerWidth-width-14,r.right-width));
+    pop.style.left=left+'px';
+    pop.style.top=Math.min(window.innerHeight-190,r.bottom+10)+'px';
+    pop.style.right='auto';pop.style.bottom='auto';
+  }
+}
+function closeMetricInfo(){const pop=$('metricInfoPopover');if(pop) pop.hidden=true;}
+document.addEventListener('click',e=>{const pop=$('metricInfoPopover');if(pop&&!pop.hidden&&!pop.contains(e.target)&&!e.target.closest('.metric-info-btn')) closeMetricInfo();});
+document.addEventListener('keydown',e=>{if(e.key==='Escape') closeMetricInfo();});
+
 </script>

@@ -1,153 +1,147 @@
 # ⚔️ ROK BattleTrack – Kingdom 3903
 
-**Current stable release: v1.5.0.1**
+**Current stable release: v1.7.1.1**
 
-ROK BattleTrack is a mobile-first **Rise of Kingdoms performance and analytics dashboard for Kingdom 3903**. It turns tracked KvK data from Google Sheets into a fast, player-friendly Google Apps Script WebApp where governors can review their own performance, requirements, historical KvKs and kingdom rankings.
+ROK BattleTrack is a mobile-first **Rise of Kingdoms performance and analytics dashboard for Kingdom 3903**. It turns tracked KvK data from Google Sheets into a fast Google Apps Script WebApp where governors can review their own combat performance, requirements, historical KvKs, rankings and Kingdom-wide development.
 
-The project started as a simple Governor ID lookup and has grown into a broader BattleTrack platform for player transparency, performance tracking and Kingdom 3903 analytics.
+The project began as a Governor ID lookup and has grown into a broader BattleTrack platform focused on transparent player statistics and Kingdom 3903 KvK analytics.
 
-## ✨ What BattleTrack can do
+## ✨ Current features
 
 ### Governor lookup & battle profile
 - Search by **Governor ID**.
-- Display governor name, kingdom, classification and tracked KvKs.
-- Show the current/latest Season with a compact battle profile.
-- Mobile-first layout designed for quick access from Discord and phones.
+- Governor name, Kingdom, classification and tracked KvKs.
+- Current/latest Season battle profile.
+- Mobile-first interface designed for Discord and phone use.
 
 ### Current Season performance
 - KvK Kill Points.
-- T4 Kills.
-- T5 Kills.
+- T4 Kills and T5 Kills.
 - T4 + T5 Kills.
 - Deads.
 - Start Power and Power Change.
-- Requirement progress and overall progress.
-- Achieved / required values plus remaining amount or completion status.
+- Requirement progress and Overall Progress.
+- Achieved / required values plus remaining amount or completion state.
 
 ### Requirements
-BattleTrack evaluates the governor against the configured KvK requirements and clearly displays progress for:
-- **Kills Requirement**
-- **Deads Requirement**
-- **Overall Progress**
+BattleTrack evaluates the governor against the configured KvK requirements and presents clear progress information and status states such as **PASS**, **NOT_MET** and **IN_PROGRESS**.
 
-Requirement status is presented directly in the player profile before optional ranking information.
+Requirements can differ by classification. BattleTrack does not fabricate a target when a requirement is not defined.
 
 ### Battle Archive
-- Historical KvK results for the governor.
-- Interactive accordion with one KvK open at a time.
-- Most recent KvKs shown first, with older history available on demand.
-- Historical performance and requirement progress remain accessible without overcrowding the mobile UI.
+- Interactive historical KvK archive.
+- Single-open accordion behavior.
+- Recent KvKs prioritized with older history available on demand.
+- Historical stats, requirement progress and result status.
+- Season / story names are read from the database rather than hardcoded in the frontend.
 
 ## 🏆 Personal Kingdom Ranking
+The Governor Profile includes a collapsible personal Kingdom Ranking with four selectable metrics:
 
-The Current Season profile contains an optional, collapsible **Kingdom Ranking** panel.
+- **DKP** — Dead & Kill Points.
+- **KPR** — Kill Points relative to Start Power.
+- **KP** — KvK Kill Points.
+- **KILLS** — T4 + T5 Kills.
 
-Players can switch instantly between:
-
-| Metric | Meaning |
-| --- | --- |
-| **DKP** | Weighted battle contribution using Deads, T4 Kills and T5 Kills |
-| **KPR** | KvK Kill Points relative to Start Power |
-| **KP** | KvK Kill Points |
-| **KILLS** | T4 + T5 Kills |
-
-The panel includes:
-- Personal rank, e.g. **#59 of 188 Governors**.
+It also includes:
+- Personal Kingdom rank.
 - **Ahead of X% of Governors** position.
-- Dynamic **Ranking Neighborhood** with up to three governors above and three below the player.
-- The current governor highlighted in the neighborhood.
-- Equal metric values share the same rank.
-- KPR displayed as a percentage.
+- Dynamic **Ranking Neighborhood** with up to three governors above and below the current governor.
+- Competition ranking for ties: equal values receive the same rank.
+- Percentile logic counts only governors with strictly lower values as behind.
 
-The ranking panel is collapsed by default to keep the profile compact on mobile.
+## 📋 Full Kingdom Ranking
+BattleTrack also provides a complete Kingdom-wide ranking independent of an individual Governor Profile.
 
-## 📊 Full Kingdom Ranking
+- Select current or historical Seasons / KvKs.
+- Switch between **DKP | KPR | KP | KILLS**.
+- All governors in the selected `KvK Results` population are included, including zero-value accounts.
+- Client-side sorting and caching provide fast metric switching without repeated backend requests.
 
-Since **v1.5.0**, BattleTrack also provides a complete Kingdom 3903 ranking independent of the individual governor profile.
+## ⓘ Ranking metric explanations
+Both personal and Full Kingdom Ranking include a compact contextual information control. The active metric can be explained directly inside the interface without permanently adding more text to the mobile layout.
 
-Features include:
-- Full tracked governor list for the selected KvK / Season.
-- Historical Season selection.
-- Interactive **DKP | KPR | KP | KILLS** switching.
-- Consistent ranking and tie logic with the personal ranking module.
-- Mobile-friendly scrollable ranking area.
-- Client-side sorting and caching for fast metric switching without repeated Google Sheets requests.
+### DKP
+`(Deads × 10) + (T4 Kills × 5) + (T5 Kills × 15)`
 
-### Ranking formulas
+### KPR
+`KvK Kill Points ÷ Start Power`
 
-**DKP**
+KPR is displayed as a percentage in the UI.
 
-```text
-(Deads × 10) + (T4 Kills × 5) + (T5 Kills × 15)
-```
+### KP
+Kill Points earned during the selected KvK.
 
-**KPR**
+### KILLS
+`T4 Kills + T5 Kills`
 
-```text
-KvK Kill Points / Start Power
-```
+## 📊 Kingdom KvK Statistics
+The Kingdom Stats dashboard aggregates the selected KvK across the complete BattleTrack `KvK Results` population and displays:
 
-KPR is presented in the UI as a percentage.
+- **Total KP**
+- **Total Kills (T4 + T5)**
+- **Total Deads**
+- **Tracked Governors**
 
-**KILLS**
+Historical Seasons can be selected directly in the dashboard.
 
-```text
-T4 Kills + T5 Kills
-```
+Resource-transfer statistics are intentionally not shown yet because BattleTrack currently has no verified RSS source in the production dataset.
 
-## 🗺️ Season-aware data
+## 📈 Kingdom Progress & Trends
+BattleTrack visualizes the Kingdom's recent development across KvKs for:
 
-Season names are sourced from the BattleTrack database rather than hard-coded into the frontend. The current tracked history includes Kingdom 3903 KvKs such as:
-- Season 2
-- Season 3 – King of All Britain
-- Season 4 – Heroic Anthem
+- Total KP.
+- Total Kills.
+- Total Deads.
+- Tracked Governors.
+- Percentage change compared with the previous displayed KvK.
 
-This allows the UI and historical rankings to follow the database as new KvKs are added.
+### Rolling-3 rule
+The Progress dashboard intentionally displays **a maximum of the latest three KvKs**. When a new KvK becomes available, the oldest one automatically leaves the comparison.
+
+Example:
+- KvK5 available → KvK3, KvK4, KvK5.
+- KvK6 available → KvK4, KvK5, KvK6.
+
+This prevents the dashboard from becoming an ever-growing historical chart and keeps the focus on recent Kingdom development.
+
+Positive/negative visual changes describe an **increase or decrease**, not automatically good or bad performance. This distinction is especially important for Deads and Tracked Governors.
+
+## 🧮 Ranking rules
+- Ranking population: all governors available in `KvK Results` for the selected KvK.
+- Ranking direction: highest metric value first.
+- Ties share the same rank.
+- Rank = `1 + number of governors with a strictly higher value`.
+- Top-% / Ahead-of position uses governors with strictly lower values only, so ties do not inflate percentile position.
 
 ## 🏗️ Architecture
 
-```text
-Google Sheets database
-        ↓
-Google Apps Script backend
-        ↓
-BattleTrack WebApp
-        ↓
-Governor Profile / Requirements / Rankings / Battle Archive
-```
+`Google Sheets → Google Apps Script backend → BattleTrack WebApp`
 
-The Apps Script source is stored in [`apps-script/`](apps-script/):
-- `Code.gs` – backend, data loading and calculations
-- `Index.html` – WebApp structure
-- `Styles.html` – responsive BattleTrack UI
-- `Scripts.html` – client-side interaction and rendering
+The repository contains the WebApp source code. Production spreadsheets and governor datasets are **not stored in this public repository**.
 
-Project documentation is stored in [`docs/`](docs/).
+### Apps Script files
+- `apps-script/Code.gs` — backend, data access and BattleTrack payloads.
+- `apps-script/Index.html` — application structure.
+- `apps-script/Styles.html` — BattleTrack UI and responsive styling.
+- `apps-script/Scripts.html` — browser-side interaction, rendering and caching.
 
-## 📱 Design goals
+## 🎨 UI direction
+BattleTrack uses a Kingdom 3903 visual identity built around deep black/navy surfaces, gold accents, metallic borders and compact mobile-first cards. Large information areas are collapsible where useful so the application remains practical on smaller screens.
 
-BattleTrack is built around a few core principles:
-- **Mobile first** – players frequently open the tool from Discord or their phone.
-- **Requirements first** – the player should see what matters for their KvK obligations before optional ranking data.
-- **Progressive disclosure** – large modules such as rankings and archives can be expanded when needed.
-- **Fast interaction** – ranking metric switches are handled client-side where possible.
-- **Single source of truth** – Season and battle data come from the BattleTrack database rather than duplicated frontend mappings.
-
-## 🚧 Roadmap
-
-Planned BattleTrack modules include:
-- Flag Filler Registry integration with Main ↔ Flag Filler navigation.
-- Mobile Hero / Keyvisual optimization.
-- Player FAQ and ranking metric explanations.
-- About BattleTrack and How It Works pages.
-- Kingdom-wide KvK statistics dashboard.
-- Historical Kingdom trends for KP, Kills, Deads and transferred RSS.
-- Additional Kingdom analytics and performance comparisons across KvKs.
+## 🗺️ Roadmap
+Planned ideas include:
+- Player FAQ.
+- About BattleTrack.
+- How It Works / data-flow explanation.
+- Rank change between KvKs.
+- Time-aware Flag Filler Registry integration.
+- Further mobile hero / keyvisual optimization.
+- Additional Kingdom analytics when reliable source data becomes available.
 
 ## 🔒 Data & repository scope
-
-This public repository contains the BattleTrack application source code and documentation. Production Google Sheets data, governor datasets, credentials, tokens and other internal Kingdom 3903 data are **not included** in the repository.
+This public repository is intended for BattleTrack source code and project documentation only. It should not contain production Google Sheet exports, private governor datasets, access tokens, credentials or other internal Kingdom data.
 
 ---
 
-**Built for Kingdom 3903 ⚔️**
+Built for **Kingdom 3903**. ⚔️

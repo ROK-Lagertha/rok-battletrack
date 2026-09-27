@@ -167,4 +167,36 @@ footer{text-align:center;color:#596575;font-size:.65rem;font-weight:800;letter-s
 .full-ranking-table td small{display:block;margin-top:2px;color:var(--muted);font-size:.62rem}.full-rank{width:68px;color:var(--gold-soft);font-family:Georgia,serif;font-weight:700}.full-value{font-weight:800;color:var(--text)}
 @media(max-width:700px){.full-ranking-panel{padding:18px 14px}.full-ranking-controls{align-items:stretch}.full-ranking-controls label,.full-ranking-controls select{width:100%;min-width:0}.full-ranking-controls .ranking-tabs{width:100%;display:grid;grid-template-columns:repeat(4,1fr)}.full-ranking-controls .ranking-tab{padding:7px 4px}.full-ranking-table-wrap{max-height:58vh}}
 
+/* v1.6.0 - OP-044 Kingdom KvK Statistics Dashboard */
+.kingdom-actions{display:flex;justify-content:center;gap:10px;flex-wrap:wrap}
+.kingdom-stats-panel{margin:14px auto 18px;scroll-margin-top:12px}
+.kingdom-stats-head{align-items:center}
+.kingdom-stats-controls{display:flex;align-items:flex-end;gap:14px;margin-bottom:10px}
+.kingdom-stats-controls label{display:flex;flex-direction:column;gap:6px;color:var(--muted);font-size:.64rem;font-weight:900;letter-spacing:.12em}
+.kingdom-stats-controls select{min-width:240px;padding:10px 34px 10px 12px;border-radius:8px;border:1px solid rgba(240,165,27,.25);background:#07111c;color:var(--text);font:inherit}
+.kingdom-stats-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:14px}
+.kingdom-stat{position:relative;min-width:0;padding:18px 16px;border:1px solid rgba(240,165,27,.2);border-radius:11px;background:linear-gradient(145deg,rgba(240,165,27,.07),rgba(5,15,25,.72));box-shadow:inset 0 1px rgba(255,255,255,.025)}
+.kingdom-stat span{display:block;color:var(--gold-soft);font-size:.62rem;font-weight:900;letter-spacing:.11em}
+.kingdom-stat strong{display:block;margin-top:8px;color:var(--text);font-family:Georgia,serif;font-size:clamp(1.15rem,2.2vw,1.7rem);line-height:1.05;overflow-wrap:anywhere}
+.kingdom-stat small{display:block;margin-top:5px;color:var(--muted);font-size:.6rem;letter-spacing:.08em}
+.kingdom-stats-note{margin-top:12px;color:var(--muted);font-size:.68rem;line-height:1.5}
+@media(max-width:760px){.kingdom-stats-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.kingdom-stats-controls,.kingdom-stats-controls label,.kingdom-stats-controls select{width:100%;min-width:0}}
+@media(max-width:420px){.kingdom-actions{display:grid;grid-template-columns:1fr;width:100%}.kingdom-actions .secondary-action{width:100%}}
+
+/* v1.7.0 - OP-045 Kingdom KvK Progress & Trends */
+.kingdom-progress-divider{display:flex;align-items:center;gap:12px;margin:24px 0 8px;color:var(--gold);font-size:.64rem;font-weight:900;letter-spacing:.14em}.kingdom-progress-divider:before,.kingdom-progress-divider:after{content:"";height:1px;flex:1;background:linear-gradient(90deg,transparent,rgba(240,165,27,.35))}.kingdom-progress-divider:after{background:linear-gradient(90deg,rgba(240,165,27,.35),transparent)}
+.kingdom-progress-intro{color:var(--muted);font-size:.68rem;line-height:1.5;margin-bottom:12px}.kingdom-progress-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.progress-card{padding:15px 14px 13px;border:1px solid rgba(240,165,27,.18);border-radius:11px;background:linear-gradient(145deg,rgba(240,165,27,.045),rgba(5,15,25,.76))}.progress-card-title{color:var(--gold-soft);font-size:.62rem;font-weight:900;letter-spacing:.11em;margin-bottom:12px}.progress-seasons{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;align-items:end}.progress-season{text-align:center;min-width:0}.progress-bar-wrap{height:62px;display:flex;align-items:flex-end;justify-content:center;margin-bottom:7px;border-bottom:1px solid rgba(255,255,255,.08)}.progress-bar{width:56%;min-height:8px;border-radius:5px 5px 1px 1px;background:linear-gradient(180deg,var(--gold-bright),var(--gold-soft));box-shadow:0 0 10px rgba(240,165,27,.18)}.progress-season strong{display:block;color:var(--text);font-family:Georgia,serif;font-size:.78rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.progress-season span{display:block;margin-top:3px;color:var(--muted);font-size:.54rem;line-height:1.25;min-height:2.5em}.progress-season em{display:inline-block;margin-top:5px;padding:3px 5px;border-radius:999px;font-style:normal;font-size:.52rem;font-weight:900;letter-spacing:.04em}.progress-season em.up{color:var(--green);background:rgba(102,216,156,.08)}.progress-season em.down{color:var(--red);background:rgba(239,115,115,.08)}.progress-season em.neutral{color:var(--muted);background:rgba(255,255,255,.04)}
+@media(max-width:760px){.kingdom-progress-grid{grid-template-columns:1fr}.progress-card{padding:14px 10px}.progress-season strong{font-size:.72rem}.progress-bar-wrap{height:54px}}
+
+
+/* OP-041 Ranking metric explanations */
+.metric-info-btn{width:30px;height:30px;min-width:30px;max-width:30px;min-height:30px;max-height:30px;aspect-ratio:1/1;flex:0 0 30px;padding:0;border:1px solid rgba(240,165,27,.62);border-radius:50%;background:rgba(7,17,29,.92);color:var(--gold-bright);font-weight:800;font-size:1rem;line-height:1;cursor:pointer;display:inline-grid;place-items:center;transition:.18s ease}
+.metric-info-btn:hover,.metric-info-btn:focus-visible{border-color:var(--gold-bright);box-shadow:0 0 14px rgba(240,165,27,.22);outline:none}
+.metric-info-popover{position:fixed;z-index:9999;width:min(340px,calc(100vw - 28px));padding:17px 42px 17px 17px;border:1px solid rgba(240,165,27,.55);border-radius:14px;background:linear-gradient(145deg,#0b1725,#07111d);box-shadow:0 18px 55px rgba(0,0,0,.62),0 0 24px rgba(240,165,27,.12);color:var(--text)}
+.metric-info-title{color:var(--gold-bright);font-family:Georgia,serif;font-size:1.18rem;font-weight:800;margin-bottom:7px}
+.metric-info-text{color:#cbd5df;font-size:.82rem;line-height:1.45}
+.metric-info-formula{margin-top:10px;padding-top:9px;border-top:1px solid rgba(240,165,27,.18);color:var(--silver);font-size:.78rem;line-height:1.4}
+.metric-info-close{position:absolute;right:10px;top:8px;border:0;background:transparent;color:var(--gold-bright);font-size:1.35rem;cursor:pointer}
+@media(max-width:760px){.metric-info-btn{width:28px;height:28px;min-width:28px;max-width:28px;min-height:28px;max-height:28px;flex-basis:28px;font-size:.94rem}.metric-info-popover{left:14px!important;right:14px!important;bottom:18px!important;top:auto!important;width:auto}}
+
 </style>

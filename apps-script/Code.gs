@@ -14,7 +14,7 @@
 
 const BT = {
 
-  VERSION: '1.5.0',
+  VERSION: '1.6.0',
 
   KINGDOM: 3903,
 
@@ -136,6 +136,52 @@ function getKingdomRankingData() {
   }).filter(x => x.kvkId && x.total > 0).sort((a,b) => numberForSort_(b.number)-numberForSort_(a.number));
 
   return { success:true, kingdom:BT.KINGDOM, seasons:seasons };
+}
+
+
+/**
+ * Kingdom-wide KvK statistics for all tracked Seasons.
+ * OP-044 / v1.6.0
+ */
+function getKingdomStatsData() {
+  const ss = getDatabase_();
+  const kvkSheet = ss.getSheetByName(BT.SHEETS.KVKS);
+  const resultSheet = ss.getSheetByName(BT.SHEETS.RESULTS);
+  if (!kvkSheet || !resultSheet) throw new Error('Required BattleTrack statistics sheets are missing.');
+
+  const kvks = sheetToObjects_(kvkSheet);
+  const results = sheetToObjects_(resultSheet);
+  const totals = {};
+
+  results.forEach(row => {
+    const kvkId = String(row['KvK ID'] || '').trim();
+    const governorId = normalizeId_(row['Governor ID']);
+    if (!kvkId || !governorId) return;
+    if (!totals[kvkId]) totals[kvkId] = {kp:0, kills:0, deads:0, governors:{}};
+    const bucket = totals[kvkId];
+    bucket.kp += Number(row['KvK Kill Points']) || 0;
+    bucket.kills += (Number(row['KvK T4 Kills']) || 0) + (Number(row['KvK T5 Kills']) || 0);
+    bucket.deads += Number(row['KvK Deads']) || 0;
+    bucket.governors[governorId] = true;
+  });
+
+  const seasons = kvks.map(kvk => {
+    const kvkId = String(kvk['KvK ID'] || '').trim();
+    const bucket = totals[kvkId];
+    if (!bucket) return null;
+    return {
+      kvkId: kvkId,
+      number: numberOrNull_(kvk['KvK Number']),
+      seasonName: String(kvk['Season Name'] || '').trim() || ('KvK ' + (kvk['KvK Number'] || '')),
+      status: String(kvk['Status'] || '').trim(),
+      totalKp: bucket.kp,
+      totalKills: bucket.kills,
+      totalDeads: bucket.deads,
+      trackedGovernors: Object.keys(bucket.governors).length
+    };
+  }).filter(Boolean).sort((a,b) => numberForSort_(b.number)-numberForSort_(a.number));
+
+  return {success:true, kingdom:BT.KINGDOM, seasons:seasons};
 }
 
 
