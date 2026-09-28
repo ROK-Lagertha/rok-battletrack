@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.11.5.2 — Mobile Scan UX & Success Flow (OP-061)
+
+- Completed and live-tested OP-061 for the Leadership Kingdom Scan workflow.
+- Added reliable scrolling and compact mobile spacing so validation, assignment and import controls remain reachable on phones and short viewports.
+- Kept the scan modal manually closable throughout the workflow.
+- Replaced the native browser `confirm()` with the BattleTrack-styled **Confirm Kingdom Scan Import** modal.
+- Confirmation shows source file, target KvK/snapshot, governor row count and the archive/write action before import.
+- Added the **Upload complete** success state after a successful controlled import.
+- Success is shown only when `SNAPSHOT INTEGRITY VERIFIED`; the UI then returns to the Leadership Command Center.
+- Error, blocked and integrity-failure states remain visible in the scan dialog.
+- No changes to backend import, Drive archive, duplicate-protection or snapshot-integrity logic.
+
 ## v1.11.5 — Snapshot Integrity Check (OP-060)
 
 - Added server-side post-import integrity verification for controlled Kingdom Scan imports.

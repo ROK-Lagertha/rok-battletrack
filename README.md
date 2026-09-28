@@ -1,7 +1,7 @@
 # ⚔️ ROK BattleTrack – Kingdom 3903
 
-**Current development release: v1.11.5**
-**Verified stable baseline: v1.11.5**
+**Current development release: v1.11.5.2**
+**Verified stable baseline: v1.11.5.2**
 
 ROK BattleTrack is a mobile-first **Rise of Kingdoms performance and analytics WebApp for Kingdom 3903**. It turns prepared KvK tracking data from Google Sheets into clear personal battle profiles, requirement progress, historical comparisons, Kingdom rankings and Kingdom-wide analytics.
 
@@ -152,6 +152,8 @@ The controlled-import pipeline adds two internal data sources alongside the exis
 - Raw snapshots and calculated KvK results are deliberately separated so importing source data cannot silently rewrite historical calculated results.
 
 **OP-060 Snapshot Integrity Check is implemented and live-tested.** After every controlled import, BattleTrack re-reads the committed snapshot and verifies expected/stored row counts, unique Governor IDs, missing/duplicate IDs and Import ID/KvK/snapshot metadata consistency before confirming `COMPLETED`. Live validation on 2026-09-28: KvK4 / MIDDLE with **215 expected / 215 stored, 215 unique IDs, 0 missing, 0 duplicates and 0 metadata mismatches**.
+
+**OP-061 Mobile Scan UX & Success Flow is implemented and live-tested in v1.11.5.2.** The Kingdom Scan workflow is fully usable on mobile and short viewports, keeps all validation/assignment/import controls reachable, replaces the native browser `confirm()` with the BattleTrack-styled **Confirm Kingdom Scan Import** modal, and only shows **Upload complete** after `SNAPSHOT INTEGRITY VERIFIED` before returning to the Leadership Command Center. Error, blocked and integrity-failure states remain visible in the scan dialog. The backend import, archive, duplicate-protection and integrity logic is unchanged.
 
 ## 📋 Full Kingdom Ranking
 BattleTrack provides a standalone Kingdom-wide ranking independent of the personal Governor Profile.

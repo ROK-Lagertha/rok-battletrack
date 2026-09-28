@@ -711,6 +711,18 @@ function closeScanUpload(){
   const modal=document.getElementById('scanUploadModal'); if(modal)modal.hidden=true;
   document.body.style.overflow='';
 }
+function showScanUploadCompletePopup(){
+  const existing=document.getElementById('scanUploadCompletePopup');if(existing)existing.remove();
+  const popup=document.createElement('div');
+  popup.id='scanUploadCompletePopup';
+  popup.className='scan-upload-complete-popup';
+  popup.setAttribute('role','status');
+  popup.setAttribute('aria-live','polite');
+  popup.innerHTML='<div class="scan-upload-complete-icon">✓</div><strong>Upload complete</strong><span>Snapshot integrity verified</span>';
+  document.body.appendChild(popup);
+  requestAnimationFrame(()=>popup.classList.add('show'));
+  setTimeout(()=>{popup.classList.remove('show');setTimeout(()=>popup.remove(),220);},1800);
+}
 function resetScanAssignment(){
   scanAssignmentState={file:null,valid:false,importing:false,fileName:'',extension:'',sizeMb:'',rows:null,columns:null,kvks:[],selectedKvk:null,snapshotType:''};
   const input=document.getElementById('kingdomScanFile'); if(input)input.value='';
@@ -813,9 +825,26 @@ function updateScanAssignment(){
 function importAssignedKingdomScan(){
   if(scanAssignmentState.importing)return;
   const file=scanAssignmentState.file,kvk=scanAssignmentState.selectedKvk,snapshot=scanAssignmentState.snapshotType;
+  if(!file||!scanAssignmentState.valid||!kvk||!snapshot||scanAssignmentState.extension!=='xlsx')return;
+  const modal=document.getElementById('scanImportConfirmModal'); if(!modal)return;
+  const fileEl=document.getElementById('scanConfirmFile'); if(fileEl)fileEl.textContent=scanAssignmentState.fileName||'Kingdom scan';
+  const targetEl=document.getElementById('scanConfirmTarget'); if(targetEl)targetEl.textContent=kvk.id+' / '+snapshot;
+  const rowsEl=document.getElementById('scanConfirmRows'); if(rowsEl)rowsEl.textContent=Number(scanAssignmentState.rows||0).toLocaleString()+' governor rows';
+  modal.hidden=false;
+}
+function closeScanImportConfirmation(){
+  const modal=document.getElementById('scanImportConfirmModal'); if(modal)modal.hidden=true;
+}
+function confirmAssignedKingdomScanImport(){
+  if(scanAssignmentState.importing)return;
+  closeScanImportConfirmation();
+  executeAssignedKingdomScanImport();
+}
+function executeAssignedKingdomScanImport(){
+  if(scanAssignmentState.importing)return;
+  const file=scanAssignmentState.file,kvk=scanAssignmentState.selectedKvk,snapshot=scanAssignmentState.snapshotType;
   const summary=document.getElementById('scanAssignmentSummary');
   if(!file||!scanAssignmentState.valid||!kvk||!snapshot||scanAssignmentState.extension!=='xlsx')return;
-  if(!confirm('Import '+scanAssignmentState.fileName+' as '+kvk.id+' / '+snapshot+'?\n\nThe original XLSX will be archived and '+Number(scanAssignmentState.rows||0).toLocaleString()+' governor rows will be written to Kingdom Snapshots.'))return;
   scanAssignmentState.importing=true;
   const btn=document.getElementById('scanImportBtn'); if(btn){btn.disabled=true;btn.textContent='IMPORTING…';}
   const reader=new FileReader();
@@ -847,6 +876,12 @@ function importAssignedKingdomScan(){
       const input=document.getElementById('kingdomScanFile');if(input)input.disabled=true;
       const target=document.getElementById('scanTargetKvk');if(target)target.disabled=true;
       const type=document.getElementById('scanSnapshotType');if(type)type.disabled=true;
+      if(result.integrity&&result.integrity.complete){
+        closeScanUpload();
+        showScanUploadCompletePopup();
+        const adminPanel=document.getElementById('adminPanel');
+        if(adminPanel){adminPanel.hidden=false;setTimeout(()=>adminPanel.scrollIntoView({behavior:'smooth',block:'start'}),120);}
+      }
     }).withFailureHandler(function(err){scanAssignmentState.importing=false;if(btn){btn.disabled=false;btn.textContent='IMPORT SCAN';}if(summary)summary.insertAdjacentHTML('beforeend','<div class="scan-import-result bad"><strong>IMPORT FAILED</strong><span>'+scanEscape(err&&err.message?err.message:'Backend import failed.')+'</span></div>');}).adminImportKingdomScanXlsx(adminSessionToken,{fileName:scanAssignmentState.fileName,base64:base64,kvkId:kvk.id,snapshotType:snapshot});
   };
   reader.readAsDataURL(file);
