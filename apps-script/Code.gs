@@ -172,6 +172,37 @@ function adminGetKvkManagementData(token) {
   };
 }
 
+/** OP-057 - Finalize a KvK and protect it from future snapshot imports. */
+function adminCloseKvk(token, payload) {
+  const user = getAdminSessionUser_(token);
+  if (!user) return { ok:false, code:'SESSION_EXPIRED', message:'Admin session expired.' };
+  payload = payload || {};
+  const kvkId = String(payload.kvkId || '').trim();
+  const result = String(payload.result || '').trim().toUpperCase();
+  const actualEndDate = String(payload.actualEndDate || '').trim();
+  if (!kvkId) return {ok:false,code:'MISSING_KVK',message:'Please select a KvK.'};
+  if (['WIN','LOST','MANUAL'].indexOf(result) === -1) return {ok:false,code:'INVALID_RESULT',message:'Result must be WIN, LOST or MANUAL.'};
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(actualEndDate)) return {ok:false,code:'INVALID_DATE',message:'Please enter a valid actual end date.'};
+  const lock=LockService.getScriptLock(); lock.waitLock(10000);
+  try {
+    const ss=getDatabase_(), sheet=ss.getSheetByName(BT.SHEETS.KVKS); if(!sheet) throw new Error('KvKs sheet is missing.');
+    const values=sheet.getDataRange().getValues(), headers=values[0].map(String), idCol=headers.indexOf('KvK ID');
+    const rowIndex=values.findIndex((r,i)=>i>0 && String(r[idCol]||'').trim()===kvkId); if(rowIndex<1)return {ok:false,code:'KVK_NOT_FOUND',message:'Selected KvK was not found.'};
+    const statusCol=headers.indexOf('Status'), current=String(values[rowIndex][statusCol]||'').trim().toLowerCase();
+    if(['historical','completed','closed'].indexOf(current)!==-1)return {ok:false,code:'KVK_ALREADY_CLOSED',message:'This KvK is already closed and protected.'};
+    const startCol=headers.indexOf('Start Scan Date'); const startIso=formatAdminDate_(values[rowIndex][startCol]); if(startIso && actualEndDate<startIso)return {ok:false,code:'INVALID_RANGE',message:'Actual end date cannot be before the KvK start date.'};
+    const needed=['Actual End Date','Result','Closed At','Closed By'];
+    needed.forEach(function(name){if(headers.indexOf(name)===-1){sheet.getRange(1,sheet.getLastColumn()+1).setValue(name);headers.push(name);}});
+    const sheetRow=rowIndex+1, actualCol=headers.indexOf('Actual End Date')+1, resultCol=headers.indexOf('Result')+1, closedAtCol=headers.indexOf('Closed At')+1, closedByCol=headers.indexOf('Closed By')+1;
+    sheet.getRange(sheetRow,statusCol+1).setValue('Closed');
+    sheet.getRange(sheetRow,actualCol).setValue(new Date(actualEndDate+'T12:00:00')).setNumberFormat('yyyy-mm-dd');
+    sheet.getRange(sheetRow,resultCol).setValue(result);
+    sheet.getRange(sheetRow,closedAtCol).setValue(new Date()); sheet.getRange(sheetRow,closedByCol).setValue(user);
+    SpreadsheetApp.flush();
+    return {ok:true,kvk:{id:kvkId,status:'Closed',result:result,actualEndDate:actualEndDate,closedBy:user}};
+  } finally { lock.releaseLock(); }
+}
+
 /**
  * OP-055 - Shared Leadership KvK Selector (v1.10.0b).
  * Returns the KvKs table as the single source of truth for Leadership tools.
@@ -195,6 +226,8 @@ function adminGetLeadershipKvks(token) {
       startDate: formatAdminDate_(r['Start Scan Date']),
       endDate: formatAdminDate_(r['End Scan Date']),
       status: status,
+      actualEndDate: formatAdminDate_(r['Actual End Date']),
+      result: String(r['Result'] || '').trim(),
       comparisonMode: isHistorical ? 'START_END' : 'START_LATEST'
     };
   }).filter(r => r.id).sort((a,b) => b.number - a.number);
@@ -687,6 +720,8 @@ function adminImportKingdomScanXlsx(token, payload) {
     if (!kvkSheet) throw new Error('KvKs sheet is missing.');
     const kvk = sheetToObjects_(kvkSheet).find(function(r){return String(r['KvK ID'] || '').trim() === kvkId;});
     if (!kvk) return {ok:false,code:'KVK_NOT_FOUND',message:'Selected KvK was not found.'};
+    const kvkStatus=String(kvk['Status']||'').trim().toLowerCase();
+    if (['historical','completed','closed'].indexOf(kvkStatus)!==-1) return {ok:false,code:'KVK_CLOSED',message:kvkId+' is closed. Historical KvKs do not accept new START, MIDDLE or END scan imports.'};
 
     const fingerprint = sha256Hex_(bytes);
     const snapshotHeaders = ['Import ID','KvK ID','KvK Number','Season Name','Snapshot Type','Imported At','Imported By','Source File','Source Sheet','Governor ID','Governor Name','Kingdom','Alliance Tag','Power','Deads','Kill Points','T1 Kills','T2 Kills','T3 Kills','T4 Kills','T5 Kills'];

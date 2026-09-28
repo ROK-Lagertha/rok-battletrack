@@ -63,8 +63,8 @@
         <article class="admin-module-card">
           <h4>KvK Management</h4>
           <p>Create the next KvK from the BattleTrack Story Catalog. KvK Number and ID are generated automatically.</p>
-          <button type="button" onclick="openKvkManagement()">ADD NEW KVK</button>
-          <small>Writes only after explicit confirmation</small>
+          <div class="admin-module-actions"><button type="button" onclick="openKvkManagement()">ADD NEW KVK</button><button type="button" class="admin-module-secondary" onclick="openKvkCloseWorkflow()">CLOSE KVK</button></div>
+          <small>Create or safely close a tracked KvK</small>
         </article>
         <article class="admin-module-card">
           <h4>Kingdom Scan</h4>
@@ -75,7 +75,7 @@
         <article class="admin-module-card">
           <h4>Current KvK Overview</h4>
           <p>Leadership view for Governor performance, Requirements and current progress.</p>
-          <button type="button" disabled>OPEN KVK OVERVIEW</button>
+          <button type="button" onclick="openCurrentKvkOverview()">OPEN KVK OVERVIEW</button>
           <small>Available when scan data exists for the selected KvK</small>
         </article>
         <article class="admin-module-card">
@@ -326,6 +326,34 @@
     <div id="metricInfoFormula" class="metric-info-formula"></div>
   </div>
 
+  <div id="currentKvkOverviewModal" class="admin-modal current-kvk-modal" hidden role="dialog" aria-modal="true" aria-labelledby="currentKvkOverviewTitle">
+    <div class="admin-modal-card current-kvk-card">
+      <button type="button" class="admin-modal-close" onclick="closeCurrentKvkOverview()" aria-label="Close Current KvK Overview">×</button>
+      <div class="kicker">KINGDOM 3903 · KVK OPERATIONS</div>
+      <div class="current-kvk-title-row">
+        <div><h3 id="currentKvkOverviewTitle">Kingdom KvK Overview</h3><p id="currentKvkOverviewMeta">Loading KvK data…</p></div>
+        <span id="currentKvkOverviewCount" class="current-kvk-count">—</span>
+      </div>
+      <div id="currentKvkOverviewMessage" class="admin-login-message"></div>
+      <div id="currentKvkOverviewContent" hidden>
+        <div class="current-kvk-summary">
+          <div><span>GOVERNORS</span><strong id="currentKvkTotal">0</strong></div>
+          <div><span>REQUIREMENT MET</span><strong id="currentKvkMet">0</strong></div>
+          <div><span id="currentKvkProgressLabel">IN PROGRESS</span><strong id="currentKvkProgress">0</strong></div>
+          <div><span>AVG. OVERALL</span><strong id="currentKvkAverage">0%</strong></div>
+        </div>
+        <div class="current-kvk-controls">
+          <select id="currentKvkSelect" onchange="loadSelectedKvkOverview()"><option value="">LOADING KVKs…</option></select>
+          <input id="currentKvkSearch" type="search" placeholder="Search Governor name or ID" oninput="renderCurrentKvkOverviewRows()">
+          <select id="currentKvkStatusFilter" onchange="renderCurrentKvkOverviewRows()"><option value="ALL">ALL STATUS</option><option value="MET">REQUIREMENT MET</option><option value="IN_PROGRESS">IN PROGRESS</option><option value="NOT_MET">NOT MET</option></select>
+          <select id="currentKvkSort" onchange="renderCurrentKvkOverviewRows()"><option value="overall-asc">LOWEST OVERALL FIRST</option><option value="overall-desc">HIGHEST OVERALL FIRST</option><option value="dkp-desc">HIGHEST DKP</option><option value="deads-desc">HIGHEST DEADS</option><option value="kills-desc">HIGHEST KILLS</option><option value="power-desc">HIGHEST START POWER</option></select>
+        </div>
+        <div class="current-kvk-table-wrap"><table class="current-kvk-table"><thead><tr><th>GOVERNOR</th><th>POWER</th><th>KP</th><th>KILLS</th><th>DEADS</th><th>DKP</th><th>KPR</th><th>KILL PROGRESS</th><th>DEAD PROGRESS</th><th>OVERALL</th><th>STATUS</th></tr></thead><tbody id="currentKvkOverviewBody"></tbody></table></div>
+        <div class="scan-safety-note"><strong>READ ONLY</strong><span>Kingdom KvK Overview uses existing BattleTrack results. Historical KvKs use START → END; active/planned KvKs use START → LATEST. No database data is changed.</span></div>
+      </div>
+    </div>
+  </div>
+
   <div id="leadershipKvkSelectorModal" class="admin-modal" hidden role="dialog" aria-modal="true" aria-labelledby="leadershipKvkSelectorTitle">
     <div class="admin-modal-card leadership-kvk-selector-card">
       <button type="button" class="admin-modal-close" onclick="closeLeadershipKvkSelector()" aria-label="Close KvK selector">×</button>
@@ -368,6 +396,37 @@
       <div id="kvkManagementMessage" class="admin-login-message"></div>
       <button id="createKvkBtn" type="button" class="admin-login-submit" onclick="createNewKvk()">CREATE KVK</button>
       <div class="scan-safety-note"><strong>SINGLE SOURCE OF TRUTH</strong><span>New KvKs are written to the KvKs table.</span></div>
+    </div>
+  </div>
+
+  <div id="kvkCloseModal" class="admin-modal" hidden role="dialog" aria-modal="true" aria-labelledby="kvkCloseTitle">
+    <div class="admin-modal-card kvk-close-card">
+      <button type="button" class="admin-modal-close" onclick="closeKvkCloseWorkflow()" aria-label="Close KvK close workflow">×</button>
+      <div class="kicker">KVK CLOSURE</div>
+      <h3 id="kvkCloseTitle">Close KvK</h3>
+      <p>Finalize a KvK and protect its historical snapshot data from future scan imports.</p>
+      <label>KVK / SEASON<select id="kvkCloseSelect" onchange="updateKvkClosePreview()"><option value="">Loading open KvKs…</option></select></label>
+      <div id="kvkClosePreview" class="kvk-close-preview" hidden>
+        <div><span>KVK</span><strong id="kvkClosePreviewName">—</strong></div>
+        <div><span>STATUS</span><strong id="kvkClosePreviewStatus">—</strong></div>
+        <div><span>PLANNED END</span><strong id="kvkClosePreviewPlanned">—</strong></div>
+      </div>
+      <label>ACTUAL END DATE<input id="kvkActualEndDate" type="date"></label>
+      <div class="kvk-close-result-title">FINAL RESULT</div>
+      <div class="kvk-close-actions"><button type="button" class="kvk-close-win" onclick="requestKvkClose('WIN')">KVK WIN</button><button type="button" class="kvk-close-loss" onclick="requestKvkClose('LOST')">KVK LOST</button><button type="button" class="kvk-close-manual" onclick="requestKvkClose('MANUAL')">MANUAL CLOSE</button></div>
+      <div id="kvkCloseMessage" class="admin-login-message"></div>
+      <div class="scan-safety-note"><strong>PERMANENT CLOSE</strong><span>Closed KvKs reject all future START, MIDDLE and END scan imports. Existing snapshots are not changed.</span></div>
+    </div>
+  </div>
+
+  <div id="kvkCloseConfirmModal" class="admin-modal scan-confirm-modal" hidden role="dialog" aria-modal="true" aria-labelledby="kvkCloseConfirmTitle">
+    <div class="admin-modal-card scan-confirm-card">
+      <button type="button" class="admin-modal-close" onclick="closeKvkCloseConfirmation()" aria-label="Cancel KvK close">×</button>
+      <div class="kicker">FINAL KVK CLOSE</div><h3 id="kvkCloseConfirmTitle">Confirm KvK Closure</h3>
+      <p>You are about to permanently close the selected KvK. Please review the details carefully before continuing.</p>
+      <div class="scan-confirm-summary"><div><span>KVK</span><strong id="kvkCloseConfirmKvk">—</strong></div><div><span>RESULT</span><strong id="kvkCloseConfirmResult">—</strong></div><div><span>ACTUAL END</span><strong id="kvkCloseConfirmDate">—</strong></div></div>
+      <div class="scan-confirm-warning kvk-close-final-warning"><strong>PERMANENT ACTION</strong><span>Once closed, this KvK becomes historical and cannot receive any further START, MIDDLE or END scans. Existing snapshot data will not be changed.</span></div>
+      <div class="scan-confirm-actions"><button type="button" class="scan-confirm-cancel" onclick="closeKvkCloseConfirmation()">CANCEL</button><button id="kvkCloseConfirmBtn" type="button" class="kvk-close-permanent-btn" onclick="confirmKvkClose()">CLOSE KVK PERMANENTLY</button></div>
     </div>
   </div>
 

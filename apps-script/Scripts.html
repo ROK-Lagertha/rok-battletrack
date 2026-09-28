@@ -739,7 +739,10 @@ function loadScanAssignmentKvks(){
       if(sel)sel.innerHTML='<option value="">KvK list unavailable</option>'; return;
     }
     scanAssignmentState.kvks=result.kvks||[];
-    if(sel)sel.innerHTML='<option value="">SELECT KVK / SEASON</option>'+scanAssignmentState.kvks.map(function(k){return '<option value="'+esc(k.id)+'">KvK '+k.number+' · '+esc(k.seasonName||k.id)+'</option>';}).join('');
+    if(sel)sel.innerHTML='<option value="">SELECT KVK / SEASON</option>'+scanAssignmentState.kvks.map(function(k){
+      const closed=k.comparisonMode==='START_END'||['historical','completed','closed'].includes(String(k.status||'').toLowerCase());
+      return '<option value="'+esc(k.id)+'"'+(closed?' disabled':'')+'>KvK '+k.number+' · '+esc(k.seasonName||k.id)+(closed?' · CLOSED — SCAN IMPORTS DISABLED':'')+'</option>';
+    }).join('');
   }).withFailureHandler(function(){if(sel)sel.innerHTML='<option value="">KvK list unavailable</option>';}).adminGetLeadershipKvks(adminSessionToken);
 }
 function scanEscape(value){
@@ -814,6 +817,8 @@ function updateScanAssignment(){
   const kvk=(scanAssignmentState.kvks||[]).find(function(k){return k.id===kvkId;})||null;
   scanAssignmentState.selectedKvk=kvk; scanAssignmentState.snapshotType=snapshot;
   const summary=document.getElementById('scanAssignmentSummary'); if(!summary)return;
+  const closed=kvk&&(kvk.comparisonMode==='START_END'||['historical','completed','closed'].includes(String(kvk.status||'').toLowerCase()));
+  if(closed){summary.hidden=false;summary.innerHTML='<div class="scan-status bad">CLOSED — SCAN IMPORTS DISABLED</div><p>This KvK is historical and protected. BattleTrack will not accept START, MIDDLE or END scans for it.</p>';return;}
   if(!scanAssignmentState.valid||!kvk||!snapshot){summary.hidden=true;summary.innerHTML='';return;}
   const rowText=scanAssignmentState.rows===null?'Validation pending':Number(scanAssignmentState.rows).toLocaleString()+' Governors';
   summary.innerHTML='<div class="scan-status good">READY FOR CONTROLLED IMPORT</div><div class="scan-summary-grid"><div><span>KVK</span><strong>KvK '+scanEscape(kvk.number)+' · '+scanEscape(kvk.seasonName||kvk.id)+'</strong></div><div><span>SNAPSHOT</span><strong>'+scanEscape(snapshot)+'</strong></div><div><span>SCAN</span><strong>'+scanEscape(scanAssignmentState.fileName)+'</strong></div><div><span>DATA</span><strong>'+scanEscape(rowText)+'</strong></div></div><p>The XLSX will be re-validated, archived unchanged and committed as a BattleTrack raw snapshot. KvK Results will not be changed.</p>'+(scanAssignmentState.extension==='xlsx'?'<button id="scanImportBtn" type="button" class="scan-import-btn" onclick="importAssignedKingdomScan()">IMPORT SCAN</button>':'<div class="scan-import-note">Controlled import currently supports validated XLSX scans.</div>');
@@ -1058,6 +1063,127 @@ function exportLeadershipComparisonCsv(){
   document.body.appendChild(a);a.click();a.remove();
   setTimeout(function(){URL.revokeObjectURL(url);},1000);
   if(msg){msg.classList.add('success');msg.textContent='KvK '+result.kvk.number+' CSV exported · '+(result.total||0)+' Governors.';}
+}
+
+
+
+// v1.12.1 - OP-057 KvK Closure Workflow
+let kvkCloseState={kvks:[],selected:null,result:''};
+function openKvkCloseWorkflow(){
+  if(!adminSessionToken){openAdminAccess();return;}
+  const modal=document.getElementById('kvkCloseModal'),sel=document.getElementById('kvkCloseSelect'),msg=document.getElementById('kvkCloseMessage');if(!modal||!sel)return;
+  modal.hidden=false;document.body.style.overflow='hidden';if(msg)msg.textContent='';sel.innerHTML='<option value="">Loading open KvKs…</option>';
+  google.script.run.withSuccessHandler(function(result){
+    if(!result||!result.ok){if(result&&result.code==='SESSION_EXPIRED'){clearAdminSession();closeKvkCloseWorkflow();openAdminLogin();return;}if(msg)msg.textContent=(result&&result.message)||'KvKs could not be loaded.';return;}
+    const closed=['historical','completed','closed'];kvkCloseState.kvks=(result.kvks||[]).filter(k=>closed.indexOf(String(k.status||'').toLowerCase())===-1);
+    sel.innerHTML='<option value="">SELECT OPEN KVK</option>'+kvkCloseState.kvks.map(k=>'<option value="'+esc(k.id)+'">KvK '+k.number+' · '+esc(k.seasonName||k.id)+' · '+esc(k.status||'OPEN')+'</option>').join('');
+    if(!kvkCloseState.kvks.length&&msg)msg.textContent='No open KvK is available to close.';
+  }).withFailureHandler(function(){if(msg)msg.textContent='KvK closure data is temporarily unavailable.';}).adminGetLeadershipKvks(adminSessionToken);
+}
+function closeKvkCloseWorkflow(){const m=document.getElementById('kvkCloseModal');if(m)m.hidden=true;document.body.style.overflow='';kvkCloseState.selected=null;kvkCloseState.result='';}
+function updateKvkClosePreview(){
+  const id=(document.getElementById('kvkCloseSelect')||{}).value||'',p=document.getElementById('kvkClosePreview');kvkCloseState.selected=kvkCloseState.kvks.find(k=>k.id===id)||null;
+  if(!kvkCloseState.selected){if(p)p.hidden=true;return;} const k=kvkCloseState.selected;if(p)p.hidden=false;
+  document.getElementById('kvkClosePreviewName').textContent='KvK '+k.number+' · '+(k.seasonName||k.id);document.getElementById('kvkClosePreviewStatus').textContent=k.status||'OPEN';document.getElementById('kvkClosePreviewPlanned').textContent=k.endDate||'—';
+  const d=document.getElementById('kvkActualEndDate');if(d&&!d.value)d.value=k.endDate||new Date().toISOString().slice(0,10);
+}
+function requestKvkClose(result){
+  const k=kvkCloseState.selected,date=(document.getElementById('kvkActualEndDate')||{}).value||'',msg=document.getElementById('kvkCloseMessage');
+  if(!k){if(msg)msg.textContent='Please select an open KvK.';return;}if(!/^\d{4}-\d{2}-\d{2}$/.test(date)){if(msg)msg.textContent='Please enter the actual KvK end date.';return;}
+  kvkCloseState.result=result;document.getElementById('kvkCloseConfirmKvk').textContent='KvK '+k.number+' · '+(k.seasonName||k.id);document.getElementById('kvkCloseConfirmResult').textContent=result==='MANUAL'?'MANUAL CLOSE':result;document.getElementById('kvkCloseConfirmDate').textContent=date;
+  document.getElementById('kvkCloseConfirmModal').hidden=false;
+}
+function closeKvkCloseConfirmation(){const m=document.getElementById('kvkCloseConfirmModal');if(m)m.hidden=true;}
+function confirmKvkClose(){
+  const k=kvkCloseState.selected,date=(document.getElementById('kvkActualEndDate')||{}).value||'',result=kvkCloseState.result,btn=document.getElementById('kvkCloseConfirmBtn'),msg=document.getElementById('kvkCloseMessage');if(!k||!result)return;
+  if(btn){btn.disabled=true;btn.textContent='CLOSING PERMANENTLY…';}
+  google.script.run.withSuccessHandler(function(r){
+    if(btn){btn.disabled=false;btn.textContent='CLOSE KVK PERMANENTLY';}closeKvkCloseConfirmation();
+    if(!r||!r.ok){if(r&&r.code==='SESSION_EXPIRED'){clearAdminSession();closeKvkCloseWorkflow();openAdminLogin();return;}if(msg)msg.textContent=(r&&r.message)||'KvK could not be closed.';return;}
+    if(msg){msg.textContent='KvK closed successfully · '+(r.kvk.result||'CLOSED')+' · '+(r.kvk.actualEndDate||date);msg.classList.add('success');}
+    const sel=document.getElementById('kvkCloseSelect');if(sel)sel.disabled=true;document.querySelectorAll('.kvk-close-actions button').forEach(b=>b.disabled=true);
+  }).withFailureHandler(function(err){if(btn){btn.disabled=false;btn.textContent='CLOSE KVK PERMANENTLY';}closeKvkCloseConfirmation();if(msg)msg.textContent=(err&&err.message)||'KvK closure failed.';}).adminCloseKvk(adminSessionToken,{kvkId:k.id,result:result,actualEndDate:date});
+}
+
+// v1.12.0b - OP-050 Kingdom KvK Overview foundation
+let currentKvkOverviewState={result:null,kvks:[],selected:null};
+function openCurrentKvkOverview(){
+  if(!adminSessionToken){openAdminAccess();return;}
+  const modal=document.getElementById('currentKvkOverviewModal'),msg=document.getElementById('currentKvkOverviewMessage'),content=document.getElementById('currentKvkOverviewContent'),sel=document.getElementById('currentKvkSelect');
+  if(modal)modal.hidden=false; document.body.style.overflow='hidden';
+  if(content)content.hidden=true; if(sel)sel.innerHTML='<option value="">LOADING KVKs…</option>'; if(msg){msg.classList.remove('success');msg.textContent='Loading KvK list…';}
+  google.script.run.withSuccessHandler(function(list){
+    if(!list||!list.ok){if(list&&list.code==='SESSION_EXPIRED'){clearAdminSession();closeCurrentKvkOverview();openAdminLogin();return;}if(msg)msg.textContent=(list&&list.message)||'KvK list could not be loaded.';return;}
+    const kvks=list.kvks||[]; currentKvkOverviewState.kvks=kvks;
+    if(!kvks.length){if(msg)msg.textContent='No KvKs are available.';return;}
+    if(sel)sel.innerHTML=kvks.map(function(k){return '<option value="'+esc(k.id)+'">KVK '+k.number+' · '+esc(k.seasonName||k.id)+' · '+esc(k.status||'—')+'</option>';}).join('');
+    const preferred=kvks.find(function(k){return k.comparisonMode==='START_LATEST';})||kvks[0];
+    if(sel)sel.value=preferred.id; currentKvkOverviewState.selected=preferred;
+    loadKvkOverview(preferred.id);
+  }).withFailureHandler(function(){if(msg)msg.textContent='KvK list is temporarily unavailable.';}).adminGetLeadershipKvks(adminSessionToken);
+}
+function closeCurrentKvkOverview(){const modal=document.getElementById('currentKvkOverviewModal');if(modal)modal.hidden=true;document.body.style.overflow='';}
+function loadSelectedKvkOverview(){const id=(document.getElementById('currentKvkSelect')||{}).value||'';if(!id)return;loadKvkOverview(id);}
+function loadKvkOverview(id){
+  const msg=document.getElementById('currentKvkOverviewMessage'),content=document.getElementById('currentKvkOverviewContent');
+  const selected=(currentKvkOverviewState.kvks||[]).find(function(k){return k.id===id;})||null; currentKvkOverviewState.selected=selected;
+  if(content)content.hidden=true; if(msg){msg.classList.remove('success');msg.textContent='Loading KvK '+(selected?selected.number:'')+'…';}
+  google.script.run.withSuccessHandler(function(result){
+    if(!result||!result.ok){if(result&&result.code==='SESSION_EXPIRED'){clearAdminSession();closeCurrentKvkOverview();openAdminLogin();return;}if(msg)msg.textContent=(result&&result.message)||'KvK results could not be loaded.';return;}
+    currentKvkOverviewState.result=result; renderCurrentKvkOverview(result);
+    const mode=result.kvk.comparisonMode==='START_END'?'START → END':'START → LATEST';
+    if(msg){msg.classList.add('success');msg.textContent='KvK '+result.kvk.number+' loaded · '+result.total+' Governors · '+mode+'.';}
+    if(content)content.hidden=false;
+  }).withFailureHandler(function(){if(msg)msg.textContent='KvK results are temporarily unavailable.';}).adminGetKvkComparison(adminSessionToken,id);
+}
+function currentKvkStatusGroup(status,isHistorical){
+  const s=String(status||'').toUpperCase().replace(/\s+/g,'_');
+  if(s==='PASS'||s==='MET'||s==='REQUIREMENT_MET')return 'MET';
+  if(isHistorical)return 'NOT_MET';
+  if(s==='NOT_MET'||s==='FAIL'||s==='FAILED')return 'NOT_MET';
+  return 'IN_PROGRESS';
+}
+function currentKvkIsHistorical(){
+  const result=currentKvkOverviewState.result;
+  return !!(result&&result.kvk&&result.kvk.comparisonMode==='START_END');
+}
+function renderCurrentKvkOverview(result){
+  const rows=result.rows||[],kvk=result.kvk||{},mode=kvk.comparisonMode==='START_END'?'START → END':'START → LATEST';
+  document.getElementById('currentKvkOverviewTitle').textContent='KvK '+kvk.number+' · '+(kvk.seasonName||kvk.id);
+  document.getElementById('currentKvkOverviewMeta').textContent=(kvk.status||'—')+' · '+mode+' · '+(kvk.startDate||'—')+' → '+(kvk.comparisonMode==='START_END'?(kvk.endDate||'END'):'LATEST');
+  document.getElementById('currentKvkOverviewCount').textContent=rows.length+' GOVERNORS';
+  const historical=kvk.comparisonMode==='START_END';
+  const met=rows.filter(function(r){return currentKvkStatusGroup(r.requirementStatus,historical)==='MET';}).length;
+  const progress=rows.filter(function(r){return currentKvkStatusGroup(r.requirementStatus,historical)===(historical?'NOT_MET':'IN_PROGRESS');}).length;
+  const vals=rows.map(function(r){return Number(r.overallProgress);}).filter(Number.isFinite);
+  const avg=vals.length?vals.reduce(function(a,b){return a+b;},0)/vals.length:0;
+  document.getElementById('currentKvkTotal').textContent=rows.length.toLocaleString('en-US');
+  document.getElementById('currentKvkMet').textContent=met.toLocaleString('en-US');
+  const progressLabel=document.getElementById('currentKvkProgressLabel');if(progressLabel)progressLabel.textContent=historical?'REQUIREMENT NOT MET':'IN PROGRESS';
+  document.getElementById('currentKvkProgress').textContent=progress.toLocaleString('en-US');
+  document.getElementById('currentKvkAverage').textContent=avg.toFixed(1)+'%';
+  const statusFilter=document.getElementById('currentKvkStatusFilter');
+  if(statusFilter){
+    const prior=statusFilter.value;
+    statusFilter.innerHTML='<option value="ALL">ALL STATUS</option><option value="MET">REQUIREMENT MET</option><option value="'+(historical?'NOT_MET':'IN_PROGRESS')+'">'+(historical?'REQUIREMENT NOT MET':'IN PROGRESS')+'</option>';
+    statusFilter.value=[...statusFilter.options].some(function(o){return o.value===prior;})?prior:'ALL';
+  }
+  renderCurrentKvkOverviewRows();
+}
+function renderCurrentKvkOverviewRows(){
+  const result=currentKvkOverviewState.result,body=document.getElementById('currentKvkOverviewBody');if(!result||!body)return;
+  const q=((document.getElementById('currentKvkSearch')||{}).value||'').trim().toLowerCase();
+  const filter=((document.getElementById('currentKvkStatusFilter')||{}).value||'ALL');
+  const sort=((document.getElementById('currentKvkSort')||{}).value||'overall-asc');
+  const historical=currentKvkIsHistorical();
+  let rows=(result.rows||[]).filter(function(r){const matches=!q||String(r.governorName||'').toLowerCase().includes(q)||String(r.governorId||'').toLowerCase().includes(q);return matches&&(filter==='ALL'||currentKvkStatusGroup(r.requirementStatus,historical)===filter);});
+  const num=function(v){v=Number(v);return Number.isFinite(v)?v:0;};
+  rows.sort(function(a,b){if(sort==='overall-desc')return num(b.overallProgress)-num(a.overallProgress);if(sort==='dkp-desc')return num(b.dkp)-num(a.dkp);if(sort==='deads-desc')return num(b.deads)-num(a.deads);if(sort==='kills-desc')return num(b.kills)-num(a.kills);if(sort==='power-desc')return num(b.startPower)-num(a.startPower);return num(a.overallProgress)-num(b.overallProgress);});
+  const fmt=function(v){return v===null||v===undefined||v===''?'—':Number(v).toLocaleString('en-US');};
+  const pct=function(v){return v===null||v===undefined||v===''?'—':Number(v).toFixed(0)+'%';};
+  const ratio=function(value,target){return fmt(value)+' / '+fmt(target);};
+  body.innerHTML=rows.map(function(r){const group=currentKvkStatusGroup(r.requirementStatus,historical),label=group==='MET'?'MET':group==='NOT_MET'?'NOT MET':'IN PROGRESS';return '<tr><td><strong>'+esc(r.governorName)+'</strong><small>'+esc(r.governorId)+'</small></td><td>'+fmt(r.startPower)+'</td><td>'+fmt(r.killPoints)+'</td><td>'+fmt(r.kills)+'</td><td>'+fmt(r.deads)+'</td><td><strong>'+fmt(r.dkp)+'</strong></td><td>'+((Number(r.kpr)||0)*100).toFixed(2)+'%</td><td><div class="kvk-progress-cell"><span>'+ratio(r.kills,r.killRequirement)+'</span><b>'+pct(r.killProgress)+'</b></div></td><td><div class="kvk-progress-cell"><span>'+ratio(r.deads,r.deadRequirement)+'</span><b>'+pct(r.deadProgress)+'</b></div></td><td><strong>'+pct(r.overallProgress)+'</strong></td><td><span class="kvk-status '+group.toLowerCase()+'">'+label+'</span></td></tr>';}).join('');
+  if(!rows.length)body.innerHTML='<tr><td colspan="11" class="leadership-comparison-empty">No Governors match the current filters.</td></tr>';
 }
 
 </script>
