@@ -1,5 +1,15 @@
 # Changelog
 
+## v1.11.5 — Snapshot Integrity Check (OP-060)
+
+- Added server-side post-import integrity verification for controlled Kingdom Scan imports.
+- Re-reads committed `Kingdom Snapshots` rows by Import ID after `SpreadsheetApp.flush()`.
+- Verifies expected vs stored governor count, unique Governor IDs, missing/duplicate IDs, and Import ID/KvK/Snapshot metadata consistency.
+- `Scan Imports` is only marked `COMPLETED` when integrity passes; mismatches are marked `INTEGRITY_FAILED`.
+- Leadership import UI now displays the integrity result and never shows a green completion state when verification fails.
+- Existing live KvK4/MIDDLE import independently verified against the database: 214 expected, 214 stored, 214 unique IDs, 0 missing, 0 duplicates, 0 metadata mismatches.
+- Live validation on 2026-09-28: KvK4 / MIDDLE, 215 expected / 215 stored, 215 unique IDs, 0 missing IDs, 0 duplicates and 0 metadata mismatches; UI reported `SNAPSHOT INTEGRITY VERIFIED`.
+
 ## v1.11.4 — Controlled Kingdom Scan Import & Drive Authorization
 - Completed OP-048 Kingdom Scan Upload & Validation.
 - Completed OP-049 Kingdom Scan Archive & Import Protocol.

@@ -1,7 +1,7 @@
 # ⚔️ ROK BattleTrack – Kingdom 3903
 
-**Current development release: v1.11.4**  
-**Verified stable baseline: v1.11.4**
+**Current development release: v1.11.5**
+**Verified stable baseline: v1.11.5**
 
 ROK BattleTrack is a mobile-first **Rise of Kingdoms performance and analytics WebApp for Kingdom 3903**. It turns prepared KvK tracking data from Google Sheets into clear personal battle profiles, requirement progress, historical comparisons, Kingdom rankings and Kingdom-wide analytics.
 
@@ -151,7 +151,7 @@ The controlled-import pipeline adds two internal data sources alongside the exis
 - Every imported governor row carries the same Import ID as its audit record, making a snapshot traceable back to the exact source XLSX.
 - Raw snapshots and calculated KvK results are deliberately separated so importing source data cannot silently rewrite historical calculated results.
 
-The next planned data-quality step is **OP-060 Snapshot Integrity Check**, which will automatically compare expected/stored row counts, unique Governor IDs and assignment consistency after an import.
+**OP-060 Snapshot Integrity Check is implemented and live-tested.** After every controlled import, BattleTrack re-reads the committed snapshot and verifies expected/stored row counts, unique Governor IDs, missing/duplicate IDs and Import ID/KvK/snapshot metadata consistency before confirming `COMPLETED`. Live validation on 2026-09-28: KvK4 / MIDDLE with **215 expected / 215 stored, 215 unique IDs, 0 missing, 0 duplicates and 0 metadata mismatches**.
 
 ## 📋 Full Kingdom Ranking
 BattleTrack provides a standalone Kingdom-wide ranking independent of the personal Governor Profile.
@@ -309,7 +309,7 @@ Planned actions include:
 The planned Start + 50 days value remains only a default planning window.
 
 ### Kingdom scan import
-The safe-preview workflow will be extended into a controlled import process with explicit KvK and snapshot-type selection (`START`, `MIDDLE`, `END`).
+The controlled import workflow is implemented for explicit KvK and snapshot-type selection (`START`, `MIDDLE`, `END`), including unchanged Drive archival, audit logging, duplicate protection and post-import integrity verification.
 
 ### Leadership analytics
 Leadership Comparison is now implemented, including the shared KvK Selector and CSV export. The next validation step is regression testing across historical KvK2–4. Remaining roadmap items include Current KvK Overview and a later Emigration Review Worklist.

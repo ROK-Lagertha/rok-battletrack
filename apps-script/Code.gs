@@ -695,10 +695,10 @@ function adminImportKingdomScanXlsx(token, payload) {
     importSheet = ensureBattleTrackSheet_(ss, BT.SHEETS.IMPORTS, importHeaders);
 
     const imports = sheetToObjects_(importSheet);
-    const sameFile = imports.find(function(r){return String(r['KvK ID']||'').trim()===kvkId && String(r['Snapshot Type']||'').trim().toUpperCase()===snapshotType && String(r['File SHA-256']||'').trim()===fingerprint && String(r['Status']||'').trim().toUpperCase()==='COMPLETED';});
+    const sameFile = imports.find(function(r){return String(r['KvK ID']||'').trim()===kvkId && String(r['Snapshot Type']||'').trim().toUpperCase()===snapshotType && String(r['File SHA-256']||'').trim()===fingerprint && ['COMPLETED','INTEGRITY_FAILED'].indexOf(String(r['Status']||'').trim().toUpperCase()) !== -1;});
     if (sameFile) return {ok:false,code:'DUPLICATE_IMPORT',message:'This exact scan has already been imported for '+kvkId+' / '+snapshotType+'.',importId:String(sameFile['Import ID']||'')};
     if (snapshotType !== 'MIDDLE') {
-      const occupied = imports.find(function(r){return String(r['KvK ID']||'').trim()===kvkId && String(r['Snapshot Type']||'').trim().toUpperCase()===snapshotType && String(r['Status']||'').trim().toUpperCase()==='COMPLETED';});
+      const occupied = imports.find(function(r){return String(r['KvK ID']||'').trim()===kvkId && String(r['Snapshot Type']||'').trim().toUpperCase()===snapshotType && ['COMPLETED','INTEGRITY_FAILED'].indexOf(String(r['Status']||'').trim().toUpperCase()) !== -1;});
       if (occupied) return {ok:false,code:'SNAPSHOT_EXISTS',message:kvkId+' already has a completed '+snapshotType+' snapshot. Existing snapshots are not overwritten automatically.'};
     }
 
@@ -726,9 +726,19 @@ function adminImportKingdomScanXlsx(token, payload) {
     snapshotRowCount = rows.length;
     snapshotSheet.getRange(snapshotStartRow,1,rows.length,snapshotHeaders.length).setValues(rows);
 
-    importSheet.getRange(importLogRow,14,1,2).setValues([['COMPLETED','Imported '+rows.length+' governors successfully.']]);
+    // Flush first, then re-read the committed rows for OP-060 integrity verification.
     SpreadsheetApp.flush();
-    return {ok:true,code:'IMPORT_COMPLETE',message:'Kingdom scan imported successfully.',importId:importId,governors:rows.length,kvkId:kvkId,kvkNumber:kvkNumber,seasonName:seasonName,snapshotType:snapshotType,archiveFileName:archiveName,fingerprint:fingerprint};
+    const integrity = snapshotIntegrityByImportId_(importId);
+    const integrityOk = !!(integrity && integrity.ok && integrity.complete);
+    importSheet.getRange(importLogRow,14,1,2).setValues([[
+      integrityOk ? 'COMPLETED' : 'INTEGRITY_FAILED',
+      integrityOk
+        ? ('Imported '+rows.length+' governors successfully. Integrity verified: '+integrity.stored+' stored / '+integrity.uniqueIds+' unique IDs.')
+        : ('Snapshot committed, but integrity verification failed. Expected '+rows.length+', stored '+(integrity && integrity.stored != null ? integrity.stored : '?')+'.')
+    ]]);
+    SpreadsheetApp.flush();
+    if (integrity) integrity.auditStatus = integrityOk ? 'COMPLETED' : 'INTEGRITY_FAILED';
+    return {ok:true,code:integrityOk?'IMPORT_COMPLETE':'IMPORT_INTEGRITY_FAILED',message:integrityOk?'Kingdom scan imported and integrity verified.':'Kingdom scan was committed, but integrity verification failed.',importId:importId,governors:rows.length,kvkId:kvkId,kvkNumber:kvkNumber,seasonName:seasonName,snapshotType:snapshotType,archiveFileName:archiveName,fingerprint:fingerprint,integrity:integrity};
   } catch (err) {
     // Roll back snapshot rows if the batch was written but a later step failed.
     try { if (snapshotSheet && snapshotStartRow && snapshotRowCount) snapshotSheet.deleteRows(snapshotStartRow, snapshotRowCount); } catch (rollbackErr) {}
@@ -737,6 +747,72 @@ function adminImportKingdomScanXlsx(token, payload) {
   } finally {
     lock.releaseLock();
   }
+}
+
+
+
+/**
+ * OP-060 - Snapshot Integrity Check.
+ * Re-reads a committed import from Kingdom Snapshots and verifies that the
+ * database state matches the Scan Imports audit row. Leadership-only.
+ */
+function adminCheckSnapshotIntegrity(token, importId) {
+  const user = getAdminSessionUser_(token);
+  if (!user) return {ok:false,code:'SESSION_EXPIRED',message:'Admin session expired.'};
+  return snapshotIntegrityByImportId_(String(importId || '').trim());
+}
+
+function snapshotIntegrityByImportId_(importId) {
+  if (!importId) return {ok:false,code:'MISSING_IMPORT_ID',message:'Import ID is required.'};
+  const ss = getDatabase_();
+  const importSheet = ss.getSheetByName(BT.SHEETS.IMPORTS);
+  const snapshotSheet = ss.getSheetByName(BT.SHEETS.SNAPSHOTS);
+  if (!importSheet || !snapshotSheet) return {ok:false,code:'INTEGRITY_SHEETS_MISSING',message:'Snapshot integrity sheets are missing.'};
+
+  const audit = sheetToObjects_(importSheet).find(function(r){return String(r['Import ID'] || '').trim() === importId;});
+  if (!audit) return {ok:false,code:'IMPORT_NOT_FOUND',message:'Import ID was not found in Scan Imports.'};
+
+  const expected = Number(audit['Governor Count']) || 0;
+  const expectedKvk = String(audit['KvK ID'] || '').trim();
+  const expectedSnapshot = String(audit['Snapshot Type'] || '').trim().toUpperCase();
+  const allRows = sheetToObjects_(snapshotSheet);
+  const rows = allRows.filter(function(r){return String(r['Import ID'] || '').trim() === importId;});
+  const ids = {};
+  let missingIds = 0;
+  let duplicateIds = 0;
+  let metadataMismatches = 0;
+
+  rows.forEach(function(r){
+    const id = normalizeId_(r['Governor ID']);
+    if (!id) missingIds++;
+    else {
+      if (ids[id]) duplicateIds++;
+      ids[id] = true;
+    }
+    if (String(r['KvK ID'] || '').trim() !== expectedKvk ||
+        String(r['Snapshot Type'] || '').trim().toUpperCase() !== expectedSnapshot ||
+        String(r['Import ID'] || '').trim() !== importId) metadataMismatches++;
+  });
+
+  const stored = rows.length;
+  const uniqueIds = Object.keys(ids).length;
+  const complete = expected > 0 && stored === expected && uniqueIds === expected && missingIds === 0 && duplicateIds === 0 && metadataMismatches === 0;
+  return {
+    ok:true,
+    code:complete?'INTEGRITY_VERIFIED':'INTEGRITY_FAILED',
+    complete:complete,
+    importId:importId,
+    kvkId:expectedKvk,
+    snapshotType:expectedSnapshot,
+    expected:expected,
+    stored:stored,
+    uniqueIds:uniqueIds,
+    missingIds:missingIds,
+    duplicateIds:duplicateIds,
+    metadataMismatches:metadataMismatches,
+    auditStatus:String(audit['Status'] || '').trim(),
+    message:complete?'Snapshot integrity verified.':'Snapshot integrity check found a mismatch.'
+  };
 }
 
 function parseKingdomScanXlsx_(bytes, fileName) {

@@ -838,7 +838,12 @@ function importAssignedKingdomScan(){
         return;
       }
       scanAssignmentState.valid=false;
-      if(summary){summary.innerHTML='<div class="scan-status good">IMPORT COMPLETE</div><div class="scan-summary-grid"><div><span>IMPORT ID</span><strong>'+scanEscape(result.importId)+'</strong></div><div><span>SNAPSHOT</span><strong>'+scanEscape(result.kvkId)+' · '+scanEscape(result.snapshotType)+'</strong></div><div><span>GOVERNORS</span><strong>'+Number(result.governors||0).toLocaleString()+'</strong></div><div><span>ARCHIVE</span><strong>'+scanEscape(result.archiveFileName||'Archived')+'</strong></div></div><p>Original XLSX archived unchanged. Raw snapshot committed to BattleTrack. KvK Results were not modified.</p>';}
+      if(summary){
+        const integrity=result.integrity||{};
+        const verified=!!integrity.complete;
+        const integrityHtml='<div class="scan-integrity '+(verified?'good':'bad')+'"><div class="scan-status '+(verified?'good':'bad')+'">'+(verified?'SNAPSHOT INTEGRITY VERIFIED':'SNAPSHOT INTEGRITY CHECK FAILED')+'</div><div class="scan-summary-grid"><div><span>EXPECTED / STORED</span><strong>'+Number(integrity.expected||result.governors||0).toLocaleString()+' / '+Number(integrity.stored||0).toLocaleString()+'</strong></div><div><span>UNIQUE IDS</span><strong>'+Number(integrity.uniqueIds||0).toLocaleString()+'</strong></div><div><span>MISSING / DUPLICATES</span><strong>'+Number(integrity.missingIds||0)+' / '+Number(integrity.duplicateIds||0)+'</strong></div><div><span>METADATA MISMATCHES</span><strong>'+Number(integrity.metadataMismatches||0)+'</strong></div></div></div>';
+        summary.innerHTML='<div class="scan-status '+(verified?'good':'bad')+'">'+(verified?'IMPORT COMPLETE':'IMPORT COMMITTED · CHECK REQUIRED')+'</div><div class="scan-summary-grid"><div><span>IMPORT ID</span><strong>'+scanEscape(result.importId)+'</strong></div><div><span>SNAPSHOT</span><strong>'+scanEscape(result.kvkId)+' · '+scanEscape(result.snapshotType)+'</strong></div><div><span>GOVERNORS</span><strong>'+Number(result.governors||0).toLocaleString()+'</strong></div><div><span>ARCHIVE</span><strong>'+scanEscape(result.archiveFileName||'Archived')+'</strong></div></div>'+integrityHtml+'<p>Original XLSX archived unchanged. Raw snapshot committed to BattleTrack. KvK Results were not modified.</p>';
+      }
       const input=document.getElementById('kingdomScanFile');if(input)input.disabled=true;
       const target=document.getElementById('scanTargetKvk');if(target)target.disabled=true;
       const type=document.getElementById('scanSnapshotType');if(type)type.disabled=true;
