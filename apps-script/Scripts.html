@@ -698,15 +698,37 @@ function clearAdminSession(){adminSessionToken='';sessionStorage.removeItem('btA
 document.addEventListener('keydown',function(e){if(e.key==='Escape'){const m=document.getElementById('adminLoginModal');if(m&&!m.hidden)closeAdminLogin();}if(e.key==='Enter'&&!document.getElementById('adminLoginModal')?.hidden)submitAdminLogin();});
 
 
-// v1.9.1 - OP-048 Kingdom Scan safe preview / validation
+// Kingdom Scan safe preview + KvK / snapshot assignment
+let scanAssignmentState = { file:null, valid:false, importing:false, fileName:'', extension:'', sizeMb:'', rows:null, columns:null, kvks:[], selectedKvk:null, snapshotType:'' };
 function openScanUpload(){
   if(!adminSessionToken){ openAdminAccess(); return; }
   const modal=document.getElementById('scanUploadModal'); if(!modal)return;
   modal.hidden=false; document.body.style.overflow='hidden';
+  resetScanAssignment();
+  loadScanAssignmentKvks();
 }
 function closeScanUpload(){
   const modal=document.getElementById('scanUploadModal'); if(modal)modal.hidden=true;
   document.body.style.overflow='';
+}
+function resetScanAssignment(){
+  scanAssignmentState={file:null,valid:false,importing:false,fileName:'',extension:'',sizeMb:'',rows:null,columns:null,kvks:[],selectedKvk:null,snapshotType:''};
+  const input=document.getElementById('kingdomScanFile'); if(input)input.value='';
+  const box=document.getElementById('scanValidationResult'); if(box){box.hidden=true;box.innerHTML='';}
+  const panel=document.getElementById('scanAssignmentPanel'); if(panel)panel.hidden=true;
+  const summary=document.getElementById('scanAssignmentSummary'); if(summary){summary.hidden=true;summary.innerHTML='';}
+  const type=document.getElementById('scanSnapshotType'); if(type)type.value='';
+}
+function loadScanAssignmentKvks(){
+  const sel=document.getElementById('scanTargetKvk'); if(sel)sel.innerHTML='<option value="">Loading KvKs…</option>';
+  google.script.run.withSuccessHandler(function(result){
+    if(!result||!result.ok){
+      if(result&&result.code==='SESSION_EXPIRED'){clearAdminSession();closeScanUpload();openAdminLogin();return;}
+      if(sel)sel.innerHTML='<option value="">KvK list unavailable</option>'; return;
+    }
+    scanAssignmentState.kvks=result.kvks||[];
+    if(sel)sel.innerHTML='<option value="">SELECT KVK / SEASON</option>'+scanAssignmentState.kvks.map(function(k){return '<option value="'+esc(k.id)+'">KvK '+k.number+' · '+esc(k.seasonName||k.id)+'</option>';}).join('');
+  }).withFailureHandler(function(){if(sel)sel.innerHTML='<option value="">KvK list unavailable</option>';}).adminGetLeadershipKvks(adminSessionToken);
 }
 function scanEscape(value){
   return String(value==null?'':value).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});
@@ -715,8 +737,24 @@ function scanDelimiter(line){
   const options=[',',';','\t']; let best=',', count=-1;
   options.forEach(function(d){const n=(line.split(d).length-1);if(n>count){count=n;best=d;}}); return best;
 }
+function setScanValidated(meta){
+  scanAssignmentState.file=meta.file||null;
+  scanAssignmentState.valid=true;
+  scanAssignmentState.fileName=meta.fileName||'';
+  scanAssignmentState.extension=meta.extension||'';
+  scanAssignmentState.sizeMb=meta.sizeMb||'';
+  scanAssignmentState.rows=meta.rows;
+  scanAssignmentState.columns=meta.columns;
+  const panel=document.getElementById('scanAssignmentPanel'); if(panel)panel.hidden=false;
+  updateScanAssignment();
+}
 function validateKingdomScan(file){
   const box=document.getElementById('scanValidationResult'); if(!box||!file)return;
+  scanAssignmentState.file=file; scanAssignmentState.valid=false; scanAssignmentState.selectedKvk=null; scanAssignmentState.snapshotType='';
+  const panel=document.getElementById('scanAssignmentPanel'); if(panel)panel.hidden=true;
+  const summary=document.getElementById('scanAssignmentSummary'); if(summary){summary.hidden=true;summary.innerHTML='';}
+  const type=document.getElementById('scanSnapshotType'); if(type)type.value='';
+  const target=document.getElementById('scanTargetKvk'); if(target)target.value='';
   box.hidden=false; box.innerHTML='<div class="scan-working">VALIDATING SCAN…</div>';
   const name=file.name||'Kingdom scan'; const ext=(name.split('.').pop()||'').toLowerCase();
   const size=(file.size/1024/1024).toFixed(2);
@@ -724,7 +762,22 @@ function validateKingdomScan(file){
     box.innerHTML='<div class="scan-status bad">FILE NOT SUPPORTED</div><p>Use CSV, TXT or XLSX.</p>'; return;
   }
   if(ext==='xlsx'){
-    box.innerHTML='<div class="scan-status warn">FILE RECOGNIZED · STRUCTURE CHECK PENDING</div><div class="scan-file-meta"><strong>'+scanEscape(name)+'</strong><span>'+size+' MB · XLSX</span></div><p>The workbook is accepted for the future KvK5 import flow. This safe-preview build does not parse Excel workbook contents yet, so nothing is sent or stored.</p>'; return;
+    box.innerHTML='<div class="scan-working">VALIDATING XLSX ON SECURE BACKEND…</div><div class="scan-file-meta"><strong>'+scanEscape(name)+'</strong><span>'+size+' MB · XLSX</span></div><p>The workbook is checked in memory. Nothing is written to Drive or the BattleTrack database.</p>';
+    const reader=new FileReader();
+    reader.onerror=function(){box.innerHTML='<div class="scan-status bad">COULD NOT READ XLSX</div>';};
+    reader.onload=function(){
+      const dataUrl=String(reader.result||''); const base64=dataUrl.indexOf(',')>=0?dataUrl.split(',')[1]:'';
+      google.script.run.withSuccessHandler(function(result){
+        if(!result||!result.ok){
+          if(result&&result.code==='SESSION_EXPIRED'){clearAdminSession();closeScanUpload();openAdminLogin();return;}
+          box.innerHTML='<div class="scan-status bad">XLSX VALIDATION FAILED</div><div class="scan-file-meta"><strong>'+scanEscape(name)+'</strong><span>'+size+' MB · XLSX</span></div><p>'+scanEscape((result&&result.message)||'The workbook could not be validated.')+'</p>';
+          return;
+        }
+        box.innerHTML='<div class="scan-status good">SCAN VALIDATED</div><div class="scan-file-meta"><strong>'+scanEscape(name)+'</strong><span>'+size+' MB · XLSX</span></div><div class="scan-check-grid"><div><span>DATA SHEET</span><strong>'+scanEscape(result.sheetName)+'</strong></div><div><span>GOVERNORS</span><strong>'+Number(result.governors||0).toLocaleString()+'</strong></div><div><span>GOVERNOR IDS</span><strong>'+Number(result.uniqueGovernorIds||0).toLocaleString()+' unique</strong></div><div><span>BATTLE FIELDS</span><strong>OK</strong></div></div><div class="scan-columns"><span>Validation</span><p>'+Number(result.columns||0)+' columns · '+(result.kingdom?('Kingdom '+scanEscape(result.kingdom)+' · '):'')+'0 duplicate IDs · 0 missing IDs · numeric battle fields OK</p></div><p class="scan-preview-foot">Validated in memory on the protected BattleTrack backend. No Drive or database write occurred.</p>';
+        setScanValidated({file:file,fileName:name,extension:ext,sizeMb:size,rows:Number(result.governors||0),columns:Number(result.columns||0),sheetName:result.sheetName,kingdom:result.kingdom});
+      }).withFailureHandler(function(err){box.innerHTML='<div class="scan-status bad">XLSX VALIDATION FAILED</div><p>'+scanEscape(err&&err.message?err.message:'Backend validation is temporarily unavailable.')+'</p>';}).adminValidateKingdomScanXlsx(adminSessionToken,{fileName:name,base64:base64});
+    };
+    reader.readAsDataURL(file); return;
   }
   const reader=new FileReader();
   reader.onerror=function(){box.innerHTML='<div class="scan-status bad">COULD NOT READ FILE</div>';};
@@ -738,12 +791,61 @@ function validateKingdomScan(file){
     const governorHints=['governorid','governor','playerid','id'];
     const hasId=normalized.some(function(h){return governorHints.includes(h);});
     const status=consistent?'SCAN STRUCTURE READABLE':'CHECK COLUMN STRUCTURE';
-    box.innerHTML='<div class="scan-status '+(consistent?'good':'warn')+'">'+status+'</div><div class="scan-file-meta"><strong>'+scanEscape(name)+'</strong><span>'+size+' MB · '+lines.length.toLocaleString()+' rows · '+headers.length+' columns</span></div><div class="scan-check-grid"><div><span>HEADER</span><strong>'+headers.length+' detected</strong></div><div><span>ROWS</span><strong>'+Math.max(0,lines.length-1).toLocaleString()+' data rows</strong></div><div><span>GOVERNOR ID</span><strong>'+(hasId?'candidate found':'not confirmed')+'</strong></div><div><span>WRITE STATUS</span><strong>NO IMPORT</strong></div></div><div class="scan-columns"><span>Detected columns</span><p>'+headers.slice(0,14).map(scanEscape).join(' · ')+(headers.length>14?' · …':'')+'</p></div><p class="scan-preview-foot">Validation is intentionally non-destructive. Exact BattleTrack field mapping will be confirmed with the first real KvK5 scan.</p>';
+    box.innerHTML='<div class="scan-status '+(consistent?'good':'warn')+'">'+status+'</div><div class="scan-file-meta"><strong>'+scanEscape(name)+'</strong><span>'+size+' MB · '+lines.length.toLocaleString()+' rows · '+headers.length+' columns</span></div><div class="scan-check-grid"><div><span>HEADER</span><strong>'+headers.length+' detected</strong></div><div><span>ROWS</span><strong>'+Math.max(0,lines.length-1).toLocaleString()+' data rows</strong></div><div><span>GOVERNOR ID</span><strong>'+(hasId?'candidate found':'not confirmed')+'</strong></div><div><span>WRITE STATUS</span><strong>NO IMPORT</strong></div></div><div class="scan-columns"><span>Detected columns</span><p>'+headers.slice(0,14).map(scanEscape).join(' · ')+(headers.length>14?' · …':'')+'</p></div><p class="scan-preview-foot">Validation is non-destructive. Assign the validated scan to a KvK and snapshot type below.</p>';
+    if(consistent)setScanValidated({file:file,fileName:name,extension:ext,sizeMb:size,rows:Math.max(0,lines.length-1),columns:headers.length});
   };
   reader.readAsText(file);
 }
+function updateScanAssignment(){
+  const kvkId=(document.getElementById('scanTargetKvk')||{}).value||'';
+  const snapshot=(document.getElementById('scanSnapshotType')||{}).value||'';
+  const kvk=(scanAssignmentState.kvks||[]).find(function(k){return k.id===kvkId;})||null;
+  scanAssignmentState.selectedKvk=kvk; scanAssignmentState.snapshotType=snapshot;
+  const summary=document.getElementById('scanAssignmentSummary'); if(!summary)return;
+  if(!scanAssignmentState.valid||!kvk||!snapshot){summary.hidden=true;summary.innerHTML='';return;}
+  const rowText=scanAssignmentState.rows===null?'Validation pending':Number(scanAssignmentState.rows).toLocaleString()+' Governors';
+  summary.innerHTML='<div class="scan-status good">READY FOR CONTROLLED IMPORT</div><div class="scan-summary-grid"><div><span>KVK</span><strong>KvK '+scanEscape(kvk.number)+' · '+scanEscape(kvk.seasonName||kvk.id)+'</strong></div><div><span>SNAPSHOT</span><strong>'+scanEscape(snapshot)+'</strong></div><div><span>SCAN</span><strong>'+scanEscape(scanAssignmentState.fileName)+'</strong></div><div><span>DATA</span><strong>'+scanEscape(rowText)+'</strong></div></div><p>The XLSX will be re-validated, archived unchanged and committed as a BattleTrack raw snapshot. KvK Results will not be changed.</p>'+(scanAssignmentState.extension==='xlsx'?'<button id="scanImportBtn" type="button" class="scan-import-btn" onclick="importAssignedKingdomScan()">IMPORT SCAN</button>':'<div class="scan-import-note">Controlled import currently supports validated XLSX scans.</div>');
+  summary.hidden=false;
+}
 
 
+
+function importAssignedKingdomScan(){
+  if(scanAssignmentState.importing)return;
+  const file=scanAssignmentState.file,kvk=scanAssignmentState.selectedKvk,snapshot=scanAssignmentState.snapshotType;
+  const summary=document.getElementById('scanAssignmentSummary');
+  if(!file||!scanAssignmentState.valid||!kvk||!snapshot||scanAssignmentState.extension!=='xlsx')return;
+  if(!confirm('Import '+scanAssignmentState.fileName+' as '+kvk.id+' / '+snapshot+'?\n\nThe original XLSX will be archived and '+Number(scanAssignmentState.rows||0).toLocaleString()+' governor rows will be written to Kingdom Snapshots.'))return;
+  scanAssignmentState.importing=true;
+  const btn=document.getElementById('scanImportBtn'); if(btn){btn.disabled=true;btn.textContent='IMPORTING…';}
+  const reader=new FileReader();
+  reader.onerror=function(){scanAssignmentState.importing=false;if(btn){btn.disabled=false;btn.textContent='IMPORT SCAN';}alert('The XLSX could not be read for import.');};
+  reader.onload=function(){
+    const dataUrl=String(reader.result||''); const base64=dataUrl.indexOf(',')>=0?dataUrl.split(',')[1]:'';
+    google.script.run.withSuccessHandler(function(result){
+      scanAssignmentState.importing=false;
+      if(!result||!result.ok){
+        if(result&&result.code==='SESSION_EXPIRED'){clearAdminSession();closeScanUpload();openAdminLogin();return;}
+        if(btn){btn.disabled=false;btn.textContent='IMPORT SCAN';}
+        const msg=(result&&result.message)||'Controlled import failed.';
+        if(summary){
+          if(result&&result.code==='DRIVE_AUTH_REQUIRED'&&result.authorizationUrl){
+            summary.insertAdjacentHTML('beforeend','<div class="scan-import-result bad"><strong>DRIVE AUTHORIZATION REQUIRED</strong><span>'+scanEscape(msg)+'</span><a class="scan-import-btn scan-auth-link" href="'+scanEscape(result.authorizationUrl)+'" target="_blank" rel="noopener">AUTHORIZE DRIVE</a><span>After Google confirms access, return to BattleTrack and click IMPORT SCAN again.</span></div>');
+          }else{
+            summary.insertAdjacentHTML('beforeend','<div class="scan-import-result bad"><strong>IMPORT BLOCKED</strong><span>'+scanEscape(msg)+'</span></div>');
+          }
+        }
+        return;
+      }
+      scanAssignmentState.valid=false;
+      if(summary){summary.innerHTML='<div class="scan-status good">IMPORT COMPLETE</div><div class="scan-summary-grid"><div><span>IMPORT ID</span><strong>'+scanEscape(result.importId)+'</strong></div><div><span>SNAPSHOT</span><strong>'+scanEscape(result.kvkId)+' · '+scanEscape(result.snapshotType)+'</strong></div><div><span>GOVERNORS</span><strong>'+Number(result.governors||0).toLocaleString()+'</strong></div><div><span>ARCHIVE</span><strong>'+scanEscape(result.archiveFileName||'Archived')+'</strong></div></div><p>Original XLSX archived unchanged. Raw snapshot committed to BattleTrack. KvK Results were not modified.</p>';}
+      const input=document.getElementById('kingdomScanFile');if(input)input.disabled=true;
+      const target=document.getElementById('scanTargetKvk');if(target)target.disabled=true;
+      const type=document.getElementById('scanSnapshotType');if(type)type.disabled=true;
+    }).withFailureHandler(function(err){scanAssignmentState.importing=false;if(btn){btn.disabled=false;btn.textContent='IMPORT SCAN';}if(summary)summary.insertAdjacentHTML('beforeend','<div class="scan-import-result bad"><strong>IMPORT FAILED</strong><span>'+scanEscape(err&&err.message?err.message:'Backend import failed.')+'</span></div>');}).adminImportKingdomScanXlsx(adminSessionToken,{fileName:scanAssignmentState.fileName,base64:base64,kvkId:kvk.id,snapshotType:snapshot});
+  };
+  reader.readAsDataURL(file);
+}
 
 // v1.9.2 - OP-053 KvK Management / Story Catalog
 let kvkManagementState = null;

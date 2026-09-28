@@ -1,5 +1,29 @@
 # Changelog
 
+## v1.11.4 — Controlled Kingdom Scan Import & Drive Authorization
+- Completed OP-048 Kingdom Scan Upload & Validation.
+- Completed OP-049 Kingdom Scan Archive & Import Protocol.
+- Completed OP-054 scan assignment to KvK and START / MIDDLE / END snapshot type.
+- Added server-side XLSX ZIP/XML parsing and validation without external CDN dependencies.
+- Added zero-cell handling for HeroScrolls numeric battle fields.
+- Added raw `Kingdom Snapshots` storage and `Scan Imports` audit logging.
+- Added SHA-256 source-file fingerprinting and duplicate-import protection.
+- Added unchanged original-XLSX archival to a configured Google Drive folder before snapshot commit.
+- Added explicit Google Drive OAuth scope handling and WebApp authorization flow.
+- Preserved `KvK Results` during raw snapshot import.
+- Production validation: KvK4 / MIDDLE imported successfully with 214 governors; archive and audit status `COMPLETED`.
+- Added OP-060 as the next planned post-import Snapshot Integrity Check.
+
+## v1.11.1b — HeroScrolls XLSX Validation Hotfix
+- Fixed HeroScrolls zero-value numeric cells that may be represented as empty/self-closing XLSX cells.
+- Confirmed server validation against a real 216-governor scan with 216 unique IDs and valid battle fields.
+
+## v1.10.0d — Leadership Comparison & CSV Export
+- Completed OP-051 Leadership Comparison & Export.
+- Dynamic KvK selection via OP-055.
+- Historical mode uses START → END; active mode uses START → LATEST.
+- Live-tested KvK2 comparison with 656 governors and KvK3 CSV export with 794 governors.
+
 ## v1.9.3 — 50-Day Planned End Automation
 - Planned KvK end date is automatically calculated as Start + 50 days.
 - The calculated end date remains editable before creation.

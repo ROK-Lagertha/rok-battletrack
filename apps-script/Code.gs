@@ -24,7 +24,9 @@ const BT = {
     GOVERNORS: 'Governors',
     KVKS: 'KvKs',
     RESULTS: 'KvK Results',
-    STORIES: 'KvK Stories'
+    STORIES: 'KvK Stories',
+    SNAPSHOTS: 'Kingdom Snapshots',
+    IMPORTS: 'Scan Imports'
   },
 
   STATUS: {
@@ -276,6 +278,107 @@ function adminGetKvkComparison(token, kvkId) {
   };
 }
 
+
+
+// v1.11.1 - Kingdom Scan XLSX server validation (memory only, no Drive/database write)
+function adminValidateKingdomScanXlsx(token, payload) {
+  const user = getAdminSessionUser_(token);
+  if (!user) return { ok:false, code:'SESSION_EXPIRED', message:'Admin session expired.' };
+  payload = payload || {};
+  const fileName = String(payload.fileName || '').trim();
+  const base64 = String(payload.base64 || '');
+  if (!fileName || !/\.xlsx$/i.test(fileName) || !base64) return { ok:false, code:'INVALID_FILE', message:'A valid XLSX file is required.' };
+  try {
+    const bytes = Utilities.base64Decode(base64);
+    const blobs = Utilities.unzip(Utilities.newBlob(bytes, 'application/zip', fileName));
+    const files = {};
+    blobs.forEach(function(b){ files[String(b.getName() || '').replace(/^\/+/, '')] = b; });
+    const workbook = xlsxText_(files, 'xl/workbook.xml');
+    const rels = xlsxText_(files, 'xl/_rels/workbook.xml.rels');
+    if (!workbook || !rels) throw new Error('Workbook structure is incomplete.');
+    const shared = xlsxSharedStrings_(files);
+    const relMap = {};
+    const relRe = /<Relationship\b[^>]*\bId="([^"]+)"[^>]*\bTarget="([^"]+)"[^>]*\/?\s*>/g;
+    let m;
+    while ((m = relRe.exec(rels))) relMap[m[1]] = m[2];
+    const sheets = [];
+    const sheetRe = /<sheet\b[^>]*\bname="([^"]+)"[^>]*\br:id="([^"]+)"[^>]*\/?\s*>/g;
+    while ((m = sheetRe.exec(workbook))) {
+      let target = relMap[m[2]] || '';
+      target = target.replace(/^\/+/, '');
+      if (target.indexOf('xl/') !== 0) target = 'xl/' + target.replace(/^\.\//, '');
+      sheets.push({name:xlsxXmlDecode_(m[1]), path:target});
+    }
+    const required = ['Governor Name','Governor ID','Power','Deads','Kill Points','T1 Kills','T2 Kills','T3 Kills','T4 Kills','T5 Kills'];
+    let selected = null;
+    for (let i=0;i<sheets.length;i++) {
+      const xml = xlsxText_(files, sheets[i].path);
+      if (!xml) continue;
+      const rows = xlsxRows_(xml, shared, 8);
+      if (!rows.length) continue;
+      const headers = rows[0].map(function(v){return String(v == null ? '' : v).trim();});
+      const missing = required.filter(function(h){return headers.indexOf(h) === -1;});
+      if (!missing.length) { selected={sheet:sheets[i], xml:xml, headers:headers}; break; }
+    }
+    if (!selected) return {ok:false, code:'NO_GOVERNOR_SHEET', message:'No worksheet with the required BattleTrack governor columns was found.', requiredColumns:required};
+    const rows = xlsxRows_(selected.xml, shared);
+    const headers = rows.shift().map(function(v){return String(v == null ? '' : v).trim();});
+    const idx = {}; headers.forEach(function(h,i){idx[h]=i;});
+    const numericFields=['Power','Deads','Kill Points','T1 Kills','T2 Kills','T3 Kills','T4 Kills','T5 Kills'];
+    const ids = {}; let duplicateIds=0, missingIds=0, invalidNumbers=0, governorRows=0; const kingdoms={};
+    rows.forEach(function(row){
+      const id=String(row[idx['Governor ID']] == null ? '' : row[idx['Governor ID']]).trim();
+      const name=String(row[idx['Governor Name']] == null ? '' : row[idx['Governor Name']]).trim();
+      if (!id && !name) return;
+      governorRows++;
+      if (!id) missingIds++; else { if(ids[id]) duplicateIds++; ids[id]=true; }
+      numericFields.forEach(function(h){
+        // HeroScrolls may encode a genuine numeric zero as an empty/self-closing XLSX cell.
+        // For BattleTrack counter fields an empty cell therefore means 0; only non-empty,
+        // non-numeric content is a validation issue.
+        const v=row[idx[h]];
+        if(v!=='' && v!=null && !isFinite(Number(v))) invalidNumbers++;
+      });
+      if (idx['Kingdom'] != null) { const k=String(row[idx['Kingdom']] == null ? '' : row[idx['Kingdom']]).trim(); if(k) kingdoms[k]=true; }
+    });
+    const valid = governorRows>0 && missingIds===0 && duplicateIds===0 && invalidNumbers===0;
+    return {
+      ok:valid,
+      code:valid?'SCAN_VALIDATED':'SCAN_DATA_ISSUES',
+      message:valid?'Kingdom scan validated.':('The governor sheet was found, but validation reported: '+missingIds+' missing ID(s), '+duplicateIds+' duplicate ID(s), '+invalidNumbers+' invalid numeric value(s).'),
+      fileName:fileName,
+      sheetName:selected.sheet.name,
+      governors:governorRows,
+      columns:headers.length,
+      uniqueGovernorIds:Object.keys(ids).length,
+      missingGovernorIds:missingIds,
+      duplicateGovernorIds:duplicateIds,
+      invalidNumericValues:invalidNumbers,
+      kingdom:Object.keys(kingdoms).length===1?Object.keys(kingdoms)[0]:'',
+      requiredColumns:required
+    };
+  } catch (err) {
+    return {ok:false, code:'XLSX_PARSE_FAILED', message:'XLSX validation failed: '+String(err && err.message ? err.message : err)};
+  }
+}
+function xlsxText_(files, name) { const b=files[name]; return b ? b.getDataAsString('UTF-8') : ''; }
+function xlsxXmlDecode_(s) { return String(s||'').replace(/&quot;/g,'"').replace(/&apos;/g,"'").replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&amp;/g,'&'); }
+function xlsxSharedStrings_(files) {
+  const xml=xlsxText_(files,'xl/sharedStrings.xml'); if(!xml)return [];
+  const out=[]; const re=/<si\b[^>]*>([\s\S]*?)<\/si>/g; let m;
+  while((m=re.exec(xml))){let text='',t;const tr=/<t\b[^>]*>([\s\S]*?)<\/t>/g;while((t=tr.exec(m[1])))text+=xlsxXmlDecode_(t[1]);out.push(text);} return out;
+}
+function xlsxColIndex_(ref) { const m=String(ref||'').match(/^([A-Z]+)/i); if(!m)return 0; let n=0; for(let i=0;i<m[1].length;i++)n=n*26+(m[1].toUpperCase().charCodeAt(i)-64); return n-1; }
+function xlsxRows_(xml, shared, limit) {
+  const out=[]; const rr=/<row\b[^>]*>([\s\S]*?)<\/row>/g; let rm;
+  while((rm=rr.exec(xml))){const row=[];const cr=/<c\b([^>]*)>([\s\S]*?)<\/c>/g;let cm;
+    while((cm=cr.exec(rm[1]))){const attrs=cm[1],body=cm[2],ref=(attrs.match(/\br="([^"]+)"/)||[])[1]||'';const type=(attrs.match(/\bt="([^"]+)"/)||[])[1]||'';const ci=xlsxColIndex_(ref);let v='';
+      if(type==='inlineStr'){const tm=body.match(/<t\b[^>]*>([\s\S]*?)<\/t>/);v=tm?xlsxXmlDecode_(tm[1]):'';} else {const vm=body.match(/<v\b[^>]*>([\s\S]*?)<\/v>/);v=vm?xlsxXmlDecode_(vm[1]):'';if(type==='s'&&v!=='')v=shared[Number(v)]==null?'':shared[Number(v)];}
+      row[ci]=v;
+    } out.push(row); if(limit&&out.length>=limit)break;
+  } return out;
+}
+
 function adminCreateKvk(token, payload) {
   const user = getAdminSessionUser_(token);
   if (!user) return { ok: false, code: 'SESSION_EXPIRED', message: 'Admin session expired.' };
@@ -516,6 +619,190 @@ function apiGet_(e) {
 
 }
 
+
+
+/**
+ * OP-054 Phase 3 / OP-049 - Controlled Kingdom Scan import.
+ * The XLSX is re-validated server-side, archived unchanged, then its core
+ * governor snapshot rows are committed in one batch. KvK Results is untouched.
+ */
+
+/**
+ * Checks whether the deploying user granted the Drive scope required by OP-049.
+ * Returns a Google authorization URL when consent is still required.
+ */
+function adminGetDriveAuthorizationStatus(token) {
+  const user = getAdminSessionUser_(token);
+  if (!user) return { ok:false, code:'SESSION_EXPIRED', message:'Admin session expired.' };
+  const scope = 'https://www.googleapis.com/auth/drive';
+  const info = ScriptApp.getAuthorizationInfo(ScriptApp.AuthMode.FULL, [scope]);
+  const required = info.getAuthorizationStatus() === ScriptApp.AuthorizationStatus.REQUIRED;
+  return {
+    ok: true,
+    authorized: !required,
+    code: required ? 'DRIVE_AUTH_REQUIRED' : 'DRIVE_AUTHORIZED',
+    authorizationUrl: required ? String(info.getAuthorizationUrl() || '') : ''
+  };
+}
+
+function driveAuthorizationRequired_() {
+  const scope = 'https://www.googleapis.com/auth/drive';
+  const info = ScriptApp.getAuthorizationInfo(ScriptApp.AuthMode.FULL, [scope]);
+  const required = info.getAuthorizationStatus() === ScriptApp.AuthorizationStatus.REQUIRED;
+  return { required: required, url: required ? String(info.getAuthorizationUrl() || '') : '' };
+}
+
+function adminImportKingdomScanXlsx(token, payload) {
+  const user = getAdminSessionUser_(token);
+  if (!user) return { ok:false, code:'SESSION_EXPIRED', message:'Admin session expired.' };
+  payload = payload || {};
+  const fileName = String(payload.fileName || '').trim();
+  const base64 = String(payload.base64 || '');
+  const kvkId = String(payload.kvkId || '').trim();
+  const snapshotType = String(payload.snapshotType || '').trim().toUpperCase();
+  if (!fileName || !/\.xlsx$/i.test(fileName) || !base64) return {ok:false,code:'INVALID_FILE',message:'A valid XLSX file is required.'};
+  if (!kvkId) return {ok:false,code:'MISSING_KVK',message:'Please select a KvK.'};
+  if (['START','MIDDLE','END'].indexOf(snapshotType) === -1) return {ok:false,code:'INVALID_SNAPSHOT',message:'Snapshot type must be START, MIDDLE or END.'};
+
+  const driveAuth = driveAuthorizationRequired_();
+  if (driveAuth.required) {
+    return {ok:false,code:'DRIVE_AUTH_REQUIRED',message:'Google Drive authorization is required before the scan can be archived.',authorizationUrl:driveAuth.url};
+  }
+
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(30000)) return {ok:false,code:'IMPORT_BUSY',message:'Another BattleTrack import is currently running. Please try again.'};
+  let archiveFile = null;
+  let snapshotSheet = null;
+  let snapshotStartRow = 0;
+  let snapshotRowCount = 0;
+  let importSheet = null;
+  let importLogRow = 0;
+  try {
+    const bytes = Utilities.base64Decode(base64);
+    const parsed = parseKingdomScanXlsx_(bytes, fileName);
+    if (!parsed.ok) return parsed;
+
+    const ss = getDatabase_();
+    const kvkSheet = ss.getSheetByName(BT.SHEETS.KVKS);
+    if (!kvkSheet) throw new Error('KvKs sheet is missing.');
+    const kvk = sheetToObjects_(kvkSheet).find(function(r){return String(r['KvK ID'] || '').trim() === kvkId;});
+    if (!kvk) return {ok:false,code:'KVK_NOT_FOUND',message:'Selected KvK was not found.'};
+
+    const fingerprint = sha256Hex_(bytes);
+    const snapshotHeaders = ['Import ID','KvK ID','KvK Number','Season Name','Snapshot Type','Imported At','Imported By','Source File','Source Sheet','Governor ID','Governor Name','Kingdom','Alliance Tag','Power','Deads','Kill Points','T1 Kills','T2 Kills','T3 Kills','T4 Kills','T5 Kills'];
+    const importHeaders = ['Import ID','KvK ID','KvK Number','Season Name','Snapshot Type','Source File','Source Sheet','File SHA-256','Governor Count','Imported At','Imported By','Archive File ID','Archive File Name','Status','Message'];
+    snapshotSheet = ensureBattleTrackSheet_(ss, BT.SHEETS.SNAPSHOTS, snapshotHeaders);
+    importSheet = ensureBattleTrackSheet_(ss, BT.SHEETS.IMPORTS, importHeaders);
+
+    const imports = sheetToObjects_(importSheet);
+    const sameFile = imports.find(function(r){return String(r['KvK ID']||'').trim()===kvkId && String(r['Snapshot Type']||'').trim().toUpperCase()===snapshotType && String(r['File SHA-256']||'').trim()===fingerprint && String(r['Status']||'').trim().toUpperCase()==='COMPLETED';});
+    if (sameFile) return {ok:false,code:'DUPLICATE_IMPORT',message:'This exact scan has already been imported for '+kvkId+' / '+snapshotType+'.',importId:String(sameFile['Import ID']||'')};
+    if (snapshotType !== 'MIDDLE') {
+      const occupied = imports.find(function(r){return String(r['KvK ID']||'').trim()===kvkId && String(r['Snapshot Type']||'').trim().toUpperCase()===snapshotType && String(r['Status']||'').trim().toUpperCase()==='COMPLETED';});
+      if (occupied) return {ok:false,code:'SNAPSHOT_EXISTS',message:kvkId+' already has a completed '+snapshotType+' snapshot. Existing snapshots are not overwritten automatically.'};
+    }
+
+    const now = new Date();
+    const importId = 'IMP-' + Utilities.formatDate(now, Session.getScriptTimeZone() || 'UTC', 'yyyyMMdd-HHmmss') + '-' + Utilities.getUuid().slice(0,8).toUpperCase();
+    const kvkNumber = Number(kvk['KvK Number']) || 0;
+    const seasonName = String(kvk['Season Name'] || '').trim();
+    const archiveName = buildArchiveName_(kvkId, snapshotType, now, fileName);
+
+    // Archive the exact original bytes before committing database rows.
+    const archiveFolder = getScanArchiveFolder_(kvkNumber || kvkId);
+    archiveFile = archiveFolder.createFile(Utilities.newBlob(bytes, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', archiveName));
+
+    // Write a PENDING audit row first; it is updated to COMPLETED only after the snapshot batch succeeds.
+    importLogRow = importSheet.getLastRow() + 1;
+    importSheet.getRange(importLogRow,1,1,importHeaders.length).setValues([[
+      importId,kvkId,kvkNumber,seasonName,snapshotType,fileName,parsed.sheetName,fingerprint,parsed.governors,now,user,archiveFile.getId(),archiveName,'PENDING','Snapshot commit pending'
+    ]]);
+
+    const rows = parsed.records.map(function(r){return [
+      importId,kvkId,kvkNumber,seasonName,snapshotType,now,user,fileName,parsed.sheetName,
+      r.governorId,r.governorName,r.kingdom,r.allianceTag,r.power,r.deads,r.killPoints,r.t1Kills,r.t2Kills,r.t3Kills,r.t4Kills,r.t5Kills
+    ];});
+    snapshotStartRow = snapshotSheet.getLastRow() + 1;
+    snapshotRowCount = rows.length;
+    snapshotSheet.getRange(snapshotStartRow,1,rows.length,snapshotHeaders.length).setValues(rows);
+
+    importSheet.getRange(importLogRow,14,1,2).setValues([['COMPLETED','Imported '+rows.length+' governors successfully.']]);
+    SpreadsheetApp.flush();
+    return {ok:true,code:'IMPORT_COMPLETE',message:'Kingdom scan imported successfully.',importId:importId,governors:rows.length,kvkId:kvkId,kvkNumber:kvkNumber,seasonName:seasonName,snapshotType:snapshotType,archiveFileName:archiveName,fingerprint:fingerprint};
+  } catch (err) {
+    // Roll back snapshot rows if the batch was written but a later step failed.
+    try { if (snapshotSheet && snapshotStartRow && snapshotRowCount) snapshotSheet.deleteRows(snapshotStartRow, snapshotRowCount); } catch (rollbackErr) {}
+    try { if (importSheet && importLogRow) importSheet.getRange(importLogRow,14,1,2).setValues([['FAILED',String(err && err.message ? err.message : err)]]); } catch (logErr) {}
+    return {ok:false,code:'IMPORT_FAILED',message:'Controlled import failed: '+String(err && err.message ? err.message : err)};
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function parseKingdomScanXlsx_(bytes, fileName) {
+  try {
+    const blobs = Utilities.unzip(Utilities.newBlob(bytes, 'application/zip', fileName));
+    const files = {};
+    blobs.forEach(function(b){ files[String(b.getName() || '').replace(/^\/+/, '')] = b; });
+    const workbook = xlsxText_(files, 'xl/workbook.xml');
+    const rels = xlsxText_(files, 'xl/_rels/workbook.xml.rels');
+    if (!workbook || !rels) throw new Error('Workbook structure is incomplete.');
+    const shared = xlsxSharedStrings_(files);
+    const relMap = {}; let m;
+    const relRe = /<Relationship\b[^>]*\bId="([^"]+)"[^>]*\bTarget="([^"]+)"[^>]*\/?\s*>/g;
+    while ((m = relRe.exec(rels))) relMap[m[1]] = m[2];
+    const sheets = [];
+    const sheetRe = /<sheet\b[^>]*\bname="([^"]+)"[^>]*\br:id="([^"]+)"[^>]*\/?\s*>/g;
+    while ((m = sheetRe.exec(workbook))) {
+      let target = relMap[m[2]] || ''; target = target.replace(/^\/+/, '');
+      if (target.indexOf('xl/') !== 0) target = 'xl/' + target.replace(/^\.\//, '');
+      sheets.push({name:xlsxXmlDecode_(m[1]),path:target});
+    }
+    const required=['Governor Name','Governor ID','Power','Deads','Kill Points','T1 Kills','T2 Kills','T3 Kills','T4 Kills','T5 Kills'];
+    let selected=null;
+    for(let i=0;i<sheets.length;i++){
+      const xml=xlsxText_(files,sheets[i].path); if(!xml)continue;
+      const preview=xlsxRows_(xml,shared,8); if(!preview.length)continue;
+      const headers=preview[0].map(function(v){return String(v==null?'':v).trim();});
+      if(required.every(function(h){return headers.indexOf(h)!==-1;})){selected={sheet:sheets[i],xml:xml};break;}
+    }
+    if(!selected)return {ok:false,code:'NO_GOVERNOR_SHEET',message:'No worksheet with the required BattleTrack governor columns was found.',requiredColumns:required};
+    const rows=xlsxRows_(selected.xml,shared); const headers=rows.shift().map(function(v){return String(v==null?'':v).trim();});
+    const idx={}; headers.forEach(function(h,i){idx[h]=i;});
+    const numericFields=['Power','Deads','Kill Points','T1 Kills','T2 Kills','T3 Kills','T4 Kills','T5 Kills'];
+    const ids={}; let duplicateIds=0,missingIds=0,invalidNumbers=0; const kingdoms={}; const records=[];
+    rows.forEach(function(row){
+      const id=normalizeId_(row[idx['Governor ID']]); const name=String(row[idx['Governor Name']]==null?'':row[idx['Governor Name']]).trim();
+      if(!id&&!name)return;
+      if(!id)missingIds++; else {if(ids[id])duplicateIds++;ids[id]=true;}
+      numericFields.forEach(function(h){const v=row[idx[h]];if(v!==''&&v!=null&&!isFinite(Number(v)))invalidNumbers++;});
+      const kingdom=idx['Kingdom']!=null?String(row[idx['Kingdom']]==null?'':row[idx['Kingdom']]).trim():''; if(kingdom)kingdoms[kingdom]=true;
+      records.push({governorId:id,governorName:name,kingdom:kingdom,allianceTag:idx['Alliance Tag']!=null?String(row[idx['Alliance Tag']]==null?'':row[idx['Alliance Tag']]).trim():'',power:xlsxNumber_(row[idx['Power']]),deads:xlsxNumber_(row[idx['Deads']]),killPoints:xlsxNumber_(row[idx['Kill Points']]),t1Kills:xlsxNumber_(row[idx['T1 Kills']]),t2Kills:xlsxNumber_(row[idx['T2 Kills']]),t3Kills:xlsxNumber_(row[idx['T3 Kills']]),t4Kills:xlsxNumber_(row[idx['T4 Kills']]),t5Kills:xlsxNumber_(row[idx['T5 Kills']])});
+    });
+    const valid=records.length>0&&missingIds===0&&duplicateIds===0&&invalidNumbers===0;
+    return {ok:valid,code:valid?'SCAN_VALIDATED':'SCAN_DATA_ISSUES',message:valid?'Kingdom scan validated.':('The governor sheet was found, but validation reported: '+missingIds+' missing ID(s), '+duplicateIds+' duplicate ID(s), '+invalidNumbers+' invalid numeric value(s).'),sheetName:selected.sheet.name,governors:records.length,columns:headers.length,uniqueGovernorIds:Object.keys(ids).length,missingGovernorIds:missingIds,duplicateGovernorIds:duplicateIds,invalidNumericValues:invalidNumbers,kingdom:Object.keys(kingdoms).length===1?Object.keys(kingdoms)[0]:'',requiredColumns:required,records:records};
+  } catch(err){return {ok:false,code:'XLSX_PARSE_FAILED',message:'XLSX validation failed: '+String(err&&err.message?err.message:err)};}
+}
+function xlsxNumber_(value){return value===''||value==null?0:Number(value);}
+function sha256Hex_(bytes){return Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,bytes).map(function(b){const n=(b+256)%256;return ('0'+n.toString(16)).slice(-2);}).join('');}
+function ensureBattleTrackSheet_(ss,name,headers){
+  let sheet=ss.getSheetByName(name);
+  if(!sheet){sheet=ss.insertSheet(name);sheet.getRange(1,1,1,headers.length).setValues([headers]);sheet.setFrozenRows(1);return sheet;}
+  const width=Math.max(sheet.getLastColumn(),headers.length); const existing=sheet.getRange(1,1,1,width).getValues()[0].slice(0,headers.length).map(function(v){return String(v||'').trim();});
+  const mismatch=headers.some(function(h,i){return existing[i]!==h;});
+  if(mismatch)throw new Error('Sheet "'+name+'" exists but its header structure does not match BattleTrack.');
+  return sheet;
+}
+function buildArchiveName_(kvkId,snapshotType,date,fileName){const stamp=Utilities.formatDate(date,Session.getScriptTimeZone()||'UTC','yyyyMMdd-HHmmss');return kvkId+'_'+snapshotType+'_'+stamp+'_'+String(fileName).replace(/[\\/:*?"<>|]/g,'_');}
+function getScanArchiveFolder_(kvkLabel){
+  const folderId = String((BATTLETRACK_CONFIG && BATTLETRACK_CONFIG.SCAN_ARCHIVE_FOLDER_ID) || '').trim();
+  if (!folderId) {
+    throw new Error('SCAN_ARCHIVE_FOLDER_ID is not configured in Config.gs.');
+  }
+  // OP-049: use one pre-created archive folder. The WebApp never creates Drive folders.
+  // KvK/snapshot remain traceable through the archived filename and Scan Imports audit row.
+  return DriveApp.getFolderById(folderId);
+}
 
 /**
  * ============================================================

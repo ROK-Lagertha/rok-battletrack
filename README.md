@@ -1,7 +1,7 @@
 # ⚔️ ROK BattleTrack – Kingdom 3903
 
-**Current development release: v1.10.0d**  
-**Verified stable baseline: v1.9.3**
+**Current development release: v1.11.4**  
+**Verified stable baseline: v1.11.4**
 
 ROK BattleTrack is a mobile-first **Rise of Kingdoms performance and analytics WebApp for Kingdom 3903**. It turns prepared KvK tracking data from Google Sheets into clear personal battle profiles, requirement progress, historical comparisons, Kingdom rankings and Kingdom-wide analytics.
 
@@ -91,13 +91,22 @@ BattleTrack now includes a protected Leadership workspace for internal Kingdom a
 
 > Admin credentials are not stored in the public repository. Configure `BT_ADMIN_USER` and `BT_ADMIN_PASSWORD` in Apps Script Script Properties.
 
-### Kingdom Scan Safe Preview
-Leadership can select a Kingdom scan and validate it in the browser before any future import workflow.
+### Kingdom Scan Validation & Controlled Import
+Leadership can upload a HeroScrolls Kingdom scan, validate it server-side and commit it as a traceable raw BattleTrack snapshot.
 
-- Local file selection and structural validation.
-- Preview-only workflow.
-- No automatic database or Drive write.
-- Designed as the safe foundation for the future START / MIDDLE / END scan import flow.
+- XLSX validation runs in Apps Script without external CDN dependencies.
+- The governor data sheet is detected by required headers rather than a hardcoded sheet name.
+- Validation checks Governor IDs, duplicate/missing IDs and numeric battle fields before any write.
+- Leadership explicitly assigns the target KvK / Season and snapshot type: **START | MIDDLE | END**.
+- **MIDDLE** may occur multiple times; the newest intermediate snapshot can later serve as LATEST.
+- The original XLSX is archived unchanged in the configured Google Drive archive folder before the snapshot commit.
+- `Scan Imports` stores the audit trail including Import ID, source file/sheet, SHA-256 fingerprint, KvK, snapshot type, governor count, importer, archive file metadata and status.
+- `Kingdom Snapshots` stores the imported raw governor rows with their Import ID and source metadata.
+- `KvK Results` is not modified by the raw controlled-import workflow.
+- Duplicate-file protection uses the SHA-256 fingerprint together with the import assignment.
+- Drive authorization is checked explicitly; the WebApp can surface Google's authorization flow when the required Drive scope is missing.
+
+**First production validation:** KvK4 / MIDDLE, 214 governors, archived successfully and committed with `COMPLETED` audit status on 2026-09-28.
 
 ### KvK Management
 Leadership can prepare the next KvK from the BattleTrack Story Catalog.
@@ -132,6 +141,17 @@ Leadership can load a Kingdom-wide working comparison for a selected KvK.
 - Export is read-only and does not write to the BattleTrack database.
 
 ---
+
+
+### Raw Scan Data Model
+The controlled-import pipeline adds two internal data sources alongside the existing calculated `KvK Results` table.
+
+- **`Kingdom Snapshots`** — raw governor values imported from an assigned Kingdom scan.
+- **`Scan Imports`** — one audit record per controlled import, including archive and source metadata.
+- Every imported governor row carries the same Import ID as its audit record, making a snapshot traceable back to the exact source XLSX.
+- Raw snapshots and calculated KvK results are deliberately separated so importing source data cannot silently rewrite historical calculated results.
+
+The next planned data-quality step is **OP-060 Snapshot Integrity Check**, which will automatically compare expected/stored row counts, unique Governor IDs and assignment consistency after an import.
 
 ## 📋 Full Kingdom Ranking
 BattleTrack provides a standalone Kingdom-wide ranking independent of the personal Governor Profile.
