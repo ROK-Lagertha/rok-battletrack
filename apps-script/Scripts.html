@@ -96,27 +96,38 @@ function renderKingdomProgress(){
   }).join('');
 }
 
-function buildFullRankingCache(){
-  if(!fullRankingData) return;
+function setFullRankingLoading(isLoading,message){
+  const select=$('fullRankingSeason');
+  if(select) select.disabled=!!isLoading;
+  document.querySelectorAll('.full-ranking-tab').forEach(btn=>btn.disabled=!!isLoading);
+  if(message && $('fullRankingMeta')) $('fullRankingMeta').textContent=message;
+}
+
+function clearFullRankingCacheForSeason(kvkId){
+  ['dkp','kpr','kp','kills'].forEach(metric=>delete fullRankingCache[kvkId+'|'+metric]);
+}
+
+function buildFullRankingCache(season){
+  if(!season) return;
   const metrics=['dkp','kpr','kp','kills'];
-  (fullRankingData.seasons||[]).forEach(season=>{
-    metrics.forEach(metric=>{
-      const cacheKey=season.kvkId+'|'+metric;
-      if(fullRankingCache[cacheKey]) return;
-      const ordered=(season.players||[]).slice().sort((a,b)=>{
-        const diff=Number(b[metric]||0)-Number(a[metric]||0);
-        return diff!==0 ? diff : String(a.governorId).localeCompare(String(b.governorId));
-      });
-      let lastValue=null,lastRank=0;
-      fullRankingCache[cacheKey]=ordered.map((player,index)=>{
-        const metricValue=Number(player[metric]||0);
-        if(lastValue===null || metricValue!==lastValue){ lastRank=index+1; lastValue=metricValue; }
-        const value=metric==='kpr' ? (metricValue*100).toFixed(2)+'%' : num(metricValue);
-        return `<tr><td class="full-rank">#${num(lastRank)}</td><td><strong>${esc(player.governorName)}</strong><small>ID ${esc(player.governorId)}</small></td><td class="full-value">${value}</td></tr>`;
-      }).join('');
+  metrics.forEach(metric=>{
+    const cacheKey=season.kvkId+'|'+metric;
+    if(fullRankingCache[cacheKey]) return;
+    const ordered=(season.players||[]).slice().sort((a,b)=>{
+      const diff=Number(b[metric]||0)-Number(a[metric]||0);
+      return diff!==0 ? diff : String(a.governorId).localeCompare(String(b.governorId));
     });
+    let lastValue=null,lastRank=0;
+    fullRankingCache[cacheKey]=ordered.map((player,index)=>{
+      const metricValue=Number(player[metric]||0);
+      if(lastValue===null || metricValue!==lastValue){ lastRank=index+1; lastValue=metricValue; }
+      const value=metric==='kpr' ? (metricValue*100).toFixed(2)+'%' : num(metricValue);
+      return `<tr><td class="full-rank">#${num(lastRank)}</td><td><strong>${esc(player.governorName)}</strong><small>ID ${esc(player.governorId)}</small></td><td class="full-value">${value}</td></tr>`;
+    }).join('');
   });
 }
+
+let fullRankingRequestId=0;
 
 function toggleFullRanking(force){
   const panel=$('fullRankingPanel');
@@ -124,19 +135,68 @@ function toggleFullRanking(force){
   panel.hidden=!shouldOpen;
   if(!shouldOpen) return;
   panel.scrollIntoView({behavior:'smooth',block:'start'});
-  if(fullRankingData){ renderFullRanking(); return; }
-  $('fullRankingMeta').textContent='Loading Kingdom ranking…';
+  if(fullRankingData){
+    const select=$('fullRankingSeason');
+    if(select?.value) loadFullRankingSeason(select.value);
+    return;
+  }
+
+  setFullRankingLoading(true,'Loading ranking seasons…');
   google.script.run
     .withSuccessHandler(data=>{
-      if(!data?.success){ $('fullRankingMeta').textContent='Kingdom ranking could not be loaded.'; return; }
-      fullRankingData=data;
-      buildFullRankingCache();
+      if(!data?.success || !(data.seasons||[]).length){
+        setFullRankingLoading(false,'Kingdom ranking could not be loaded.');
+        return;
+      }
+      fullRankingData={success:true,kingdom:data.kingdom,seasons:(data.seasons||[]).map(s=>({...s,players:null,total:null}))};
       const select=$('fullRankingSeason');
-      select.innerHTML=(data.seasons||[]).map(s=>`<option value="${esc(s.kvkId)}">${esc(s.seasonName)}</option>`).join('');
+      select.innerHTML=fullRankingData.seasons.map(s=>`<option value="${esc(s.kvkId)}">${esc(s.seasonName)}</option>`).join('');
+      select.disabled=false;
+      loadFullRankingSeason(select.value);
+    })
+    .withFailureHandler(err=>{
+      setFullRankingLoading(false,(err?.message||'Kingdom ranking could not be loaded.')+' Close and reopen to retry.');
+    })
+    .getKingdomRankingMeta();
+}
+
+function loadFullRankingSeason(kvkId){
+  if(!fullRankingData || !kvkId) return;
+  const season=(fullRankingData.seasons||[]).find(s=>s.kvkId===kvkId);
+  if(!season) return;
+  const select=$('fullRankingSeason');
+  if(select && select.value!==kvkId) select.value=kvkId;
+
+  if(Array.isArray(season.players)){
+    setFullRankingLoading(false);
+    buildFullRankingCache(season);
+    renderFullRanking();
+    return;
+  }
+
+  const requestId=++fullRankingRequestId;
+  setFullRankingLoading(true,`Loading ${season.seasonName} ranking…`);
+  if($('fullRankingBody')) $('fullRankingBody').innerHTML='';
+
+  google.script.run
+    .withSuccessHandler(data=>{
+      if(requestId!==fullRankingRequestId) return;
+      if(!data?.success){
+        setFullRankingLoading(false,'Kingdom ranking could not be loaded.');
+        return;
+      }
+      season.players=data.players||[];
+      season.total=Number(data.total)||season.players.length;
+      clearFullRankingCacheForSeason(season.kvkId);
+      buildFullRankingCache(season);
+      setFullRankingLoading(false);
       renderFullRanking();
     })
-    .withFailureHandler(err=>{ $('fullRankingMeta').textContent=err?.message||'Kingdom ranking could not be loaded.'; })
-    .getKingdomRankingData();
+    .withFailureHandler(err=>{
+      if(requestId!==fullRankingRequestId) return;
+      setFullRankingLoading(false,(err?.message||'Kingdom ranking could not be loaded.')+' Change season or reopen to retry.');
+    })
+    .getKingdomRankingSeasonData(kvkId);
 }
 
 function renderFullRanking(){
@@ -144,21 +204,31 @@ function renderFullRanking(){
   const select=$('fullRankingSeason');
   const season=(fullRankingData.seasons||[]).find(s=>s.kvkId===select.value) || fullRankingData.seasons?.[0];
   if(!season) return;
+  if(!Array.isArray(season.players)){ loadFullRankingSeason(season.kvkId); return; }
   const labels={dkp:'DKP',kpr:'KPR',kp:'KP',kills:'KILLS'};
   const cacheKey=season.kvkId+'|'+fullRankingMetric;
-  if(!fullRankingCache[cacheKey]) buildFullRankingCache();
+  if(!fullRankingCache[cacheKey]) buildFullRankingCache(season);
   const wrap=document.querySelector('.full-ranking-table-wrap');
   const scrollTop=wrap ? wrap.scrollTop : 0;
   $('fullRankingValueHead').textContent=labels[fullRankingMetric];
   $('fullRankingMeta').textContent=`${season.seasonName} · ${num(season.total)} Governors`;
   $('fullRankingBody').innerHTML=fullRankingCache[cacheKey]||'';
   if(wrap) wrap.scrollTop=scrollTop;
-  document.querySelectorAll('.full-ranking-tab').forEach(btn=>btn.classList.toggle('active',btn.dataset.fullRanking===fullRankingMetric));
+  document.querySelectorAll('.full-ranking-tab').forEach(btn=>{
+    btn.disabled=false;
+    btn.classList.toggle('active',btn.dataset.fullRanking===fullRankingMetric);
+  });
+  if(select) select.disabled=false;
 }
 
 document.addEventListener('click',e=>{
   const btn=e.target.closest('.full-ranking-tab');
-  if(btn){ const next=btn.dataset.fullRanking; if(next===fullRankingMetric) return; fullRankingMetric=next; requestAnimationFrame(renderFullRanking); }
+  if(btn && !btn.disabled){
+    const next=btn.dataset.fullRanking;
+    if(next===fullRankingMetric) return;
+    fullRankingMetric=next;
+    requestAnimationFrame(renderFullRanking);
+  }
 });
 
 function searchGovernor(){

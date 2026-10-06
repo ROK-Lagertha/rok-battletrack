@@ -1,5 +1,31 @@
 # Changelog
 
+## v1.12.2b — OP-058 Fast Startup & Ranking Reliability
+- Completed and live-tested OP-058.
+- Removed repeated Drive reads/Base64 conversion of the three large UI images from the critical `doGet()` startup path and replaced them with optimized static frontend assets.
+- Reduced the UI image payload from more than 6 MB of source images to roughly 311 KB of optimized embedded assets.
+- Changed Full Kingdom Ranking to load KvK metadata first and governor data only for the selected KvK.
+- Added a 10-minute server-side cache per KvK ranking dataset.
+- Added deterministic loading/disabled/enabled states and stale-request protection for ranking category controls.
+- Live test on 2026-10-06 confirmed significantly faster initial load/reload and reliable DKP/KPR/KP/KILLS plus Season switching.
+- No changes to DKP/KPR/KP/KILLS business formulas.
+
+## v1.12.1b — OP-057 KvK Closure Phase 1 / Final Safety
+- Added WIN / LOST / MANUAL CLOSE workflow with Actual End Date separate from Planned End.
+- Added permanent BattleTrack confirmation before closing a KvK.
+- Added server-side rejection of START/MIDDLE/END scan imports for closed/historical KvKs.
+- Historical KvKs are visibly disabled in Kingdom Scan assignment with `CLOSED — SCAN IMPORTS DISABLED`.
+- Existing snapshots remain untouched.
+- Protection flow live-tested; final closure write awaits the next genuinely open KvK.
+
+## v1.12.0c — OP-050 Leadership Kingdom KvK Overview Phase 1
+- Added read-only Leadership Kingdom KvK Overview with dynamic KvK selection.
+- Added Governor search, requirement-status filtering and sorting.
+- Historical KvKs resolve START → END; active KvKs resolve START → LATEST.
+- Corrected percentage display and historical MET / NOT MET semantics.
+- Smoothed page background transitions and removed mobile horizontal overflow.
+- Phase 1 live-tested successfully.
+
 ## v1.11.5.2 — Mobile Scan UX & Success Flow (OP-061)
 
 - Completed and live-tested OP-061 for the Leadership Kingdom Scan workflow.

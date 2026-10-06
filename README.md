@@ -1,6 +1,7 @@
 # ⚔️ ROK BattleTrack – Kingdom 3903
 
-**Current development release: v1.11.5.2**
+**Current development release: v1.12.2b**  
+**Pre-Cloudflare migration baseline: v1.12.2b**  
 **Verified stable baseline: v1.11.5.2**
 
 ROK BattleTrack is a mobile-first **Rise of Kingdoms performance and analytics WebApp for Kingdom 3903**. It turns prepared KvK tracking data from Google Sheets into clear personal battle profiles, requirement progress, historical comparisons, Kingdom rankings and Kingdom-wide analytics.
@@ -161,7 +162,10 @@ BattleTrack provides a standalone Kingdom-wide ranking independent of the person
 - Select current or historical KvKs / Seasons.
 - Switch between **DKP | KPR | KP | KILLS**.
 - All governors in `KvK Results` for the selected KvK are included, including zero-value accounts.
-- Client-side precomputation and caching keep metric switching fast.
+- Ranking metadata is loaded first; governor ranking data is lazy-loaded only for the selected KvK.
+- Each selected KvK ranking dataset is cached server-side for 10 minutes.
+- Metric switching remains client-side and fast once the selected KvK is loaded.
+- Request-state protection prevents stale responses from leaving ranking categories disabled or overwriting newer selections.
 - Ranking table scroll position is preserved when switching metrics.
 
 ### Ranking formulas
@@ -297,39 +301,38 @@ Season/story labels are data-driven.
 
 ## 🚧 Roadmap
 
-### KvK closing workflow
-A dedicated Leadership closing flow is planned on top of the existing KvK Management foundation.
+### Leadership Kingdom KvK Overview (OP-050)
+Phase 1 is implemented and live-tested in v1.12.0c. The read-only Leadership cockpit supports dynamic KvK selection, Governor search, status filtering and sorting. Historical KvKs use **START → END**; active KvKs use **START → LATEST**. Phase 2 remains open for later expansion.
 
-Planned actions include:
+### KvK closing workflow (OP-057)
+Phase 1 is implemented and partially live-tested in v1.12.1b.
 
-- **KvK Win**.
-- **KvK Lost**.
-- Manual KvK close.
-- Store the actual end date separately from the planned end date.
-- Use the actual end date as the final statistical cut-off when available.
+- Leadership can choose **KVK WIN**, **KVK LOST** or **MANUAL CLOSE**.
+- Actual End Date is stored separately from Planned End.
+- A BattleTrack final-safety confirmation is required before permanent closure.
+- Closed/historical KvKs reject future START, MIDDLE and END scan imports server-side.
+- Scan assignment visibly marks protected seasons as **CLOSED — SCAN IMPORTS DISABLED**.
+- Existing historical snapshots are not changed by closure.
 
-The planned Start + 50 days value remains only a default planning window.
+The final production closure write remains to be tested with the next genuinely open KvK. Historical backfill for already closed KvKs remains open.
 
-### Kingdom scan import
-The controlled import workflow is implemented for explicit KvK and snapshot-type selection (`START`, `MIDDLE`, `END`), including unchanged Drive archival, audit logging, duplicate protection and post-import integrity verification.
-
-### Leadership analytics
-Leadership Comparison is now implemented, including the shared KvK Selector and CSV export. The next validation step is regression testing across historical KvK2–4. Remaining roadmap items include Current KvK Overview and a later Emigration Review Worklist.
+### WebApp performance (OP-058)
+Completed and live-tested in v1.12.2b. The startup path no longer fetches and Base64-encodes the large UI images from Drive on every request. Full Kingdom Ranking now loads metadata first and lazy-loads only the selected KvK, with a 10-minute server cache and deterministic request/UI state handling.
 
 ### Flag Filler Registry integration
-Time-aware Main ↔ Flag Filler integration is planned but intentionally deferred until sufficient live test cases are available.
+Main ↔ Flag Filler integration is planned for the post-Cloudflare architecture. The external Flag Filler Registry remains the intended single source of truth; BattleTrack should consume Governor-ID-based, time-aware relationships rather than duplicate registry ownership. Historical classification must not be retroactively rewritten from a current relationship.
 
-The intended approach is:
+### Leadership Governor Review & Marker History (OP-059)
+Planned for a later Leadership phase: individual Leadership logins, Governor review, internal markers and immutable marker history. Player-facing profiles/API must not expose Leadership-only marker data.
 
-- Link Main and Flag Filler profiles.
-- Use the active registry for current relationships.
-- Preserve historical classification semantics.
-- Do **not** retroactively reclassify old KvKs based only on a current Flag Filler relationship.
+### Copyright / Legal Notice (OP-062)
+Open before broader/public distribution: document ownership of BattleTrack code/assets, third-party trademarks/assets, non-affiliation wording, and appropriate README/LICENSE notices.
 
-### Future analytics
-Additional Kingdom analytics may be added when reliable production data sources are available.
+### Acclaim Performance Indicator (OP-063)
+Planned as a future player/Kingdom analytics feature. Highest Acclaim and Acclaim Ratio should remain separate performance indicators and use the raw values already available to BattleTrack.
 
----
+### Cloudflare migration
+v1.12.2b is the pre-migration functional baseline. New architecture work should be regression-tested against the current Apps Script behavior before new feature development continues.
 
 ## 🔒 Repository & data scope
 This public repository is intended for:
@@ -348,27 +351,22 @@ It should **not** contain:
 
 ## 🏷️ Release status
 
-### v1.10.0d — Current development release
+### v1.12.2b — Current development / pre-Cloudflare migration baseline
 Highlights:
-- Dynamic Leadership KvK Selector (OP-055).
-- Historical and active comparison-window resolution: **START → END** / **START → LATEST**.
-- Leadership Comparison foundation (OP-051).
-- DKP/KPR performance comparison and DKP ranking for the selected KvK.
-- Client-side CSV export of the currently loaded Leadership comparison.
-- Historical KvK2 comparison successfully tested with **656 Governors**.
-- Existing Leadership authentication, scan preview, KvK Management and public player features retained.
+- OP-050 Leadership Kingdom KvK Overview Phase 1 live-tested.
+- OP-057 KvK Closure Phase 1 with permanent final confirmation and historical scan protection.
+- OP-058 Fast Startup completed: large Drive/Base64 image work removed from the critical `doGet()` path.
+- OP-058 Ranking Reliability completed: per-KvK lazy loading, 10-minute server cache and stale-request protection.
+- Full Kingdom Ranking menu/category switching live-tested successfully after fresh load, reload and Season changes.
+- Existing DKP/KPR/KP/KILLS formulas and business rules remain unchanged.
 
-Before promoting v1.10.0 to the next stable baseline, the Leadership Comparison / export flow should be regression-tested with historical KvK2, KvK3 and KvK4.
+This version is the reference baseline for the upcoming Cloudflare migration.
 
-### v1.9.3 — Verified stable baseline
-- Leadership Command Center foundation.
-- Server-side Admin authentication and short-lived session handling.
-- Kingdom Scan Safe Preview.
-- KvK Management backed by `KvKs` and `KvK Stories`.
-- Automatic next KvK Number / ID generation.
-- Story-driven Season name preview.
-- Planned End defaulted to **Start + 50 days** and remains editable.
-- No automatic KvK closure.
+### v1.11.5.2 — Verified stable baseline
+- OP-061 Mobile Scan UX & Success Flow.
+- BattleTrack-styled scan confirmation instead of native browser confirmation.
+- `Upload complete` only after verified snapshot integrity.
+- Controlled import, archive, duplicate protection and integrity checks retained.
 
 ---
 

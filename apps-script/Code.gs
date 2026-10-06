@@ -57,30 +57,15 @@ function doGet(e) {
     return apiGet_(e);
   }
 
+  // OP-058 Phase A: keep the initial render path free of Drive reads.
+  // UI artwork is shipped as optimized static data URIs in Index.html, so the
+  // BattleTrack shell can be evaluated immediately on first load and reload.
   const template = HtmlService.createTemplateFromFile('Index');
-  template.battleTrackLogo = getBattleTrackLogo_();
-  template.footerCappyLeft = getDriveImageDataUri_('1xFtbagL5u1pl9a7rbJx-H39opEueSFQc');
-  template.footerCappyRight = getDriveImageDataUri_('1KKgOJijSOHzeZbW22sfiI_ucspC6foQs');
 
   return template
     .evaluate()
     .setTitle('ROK BattleTrack')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
-}
-
-function getBattleTrackLogo_() {
-  const fileId = '1sx4j_V1b7Zw73Wb-iHtNQV9wrvAhUmAJ';
-  const blob = DriveApp.getFileById(fileId).getBlob();
-  const base64 = Utilities.base64Encode(blob.getBytes());
-  return 'data:image/png;base64,' + base64;
-}
-
-
-
-function getDriveImageDataUri_(fileId) {
-  const blob = DriveApp.getFileById(fileId).getBlob();
-  const base64 = Utilities.base64Encode(blob.getBytes());
-  return 'data:' + (blob.getContentType() || 'image/png') + ';base64,' + base64;
 }
 
 function include_(filename) {
@@ -487,26 +472,85 @@ function getPlayerData(governorId) {
  * Client-callable via google.script.run.
  */
 function getKingdomRankingData() {
+  // Backward-compatible bridge. OP-058 Phase B uses the split meta/season API below.
+  const meta = getKingdomRankingMeta();
+  if (!meta.success) return meta;
+  return {
+    success: true,
+    kingdom: meta.kingdom,
+    seasons: meta.seasons.map(function(season) {
+      const detail = getKingdomRankingSeasonData(season.kvkId);
+      return Object.assign({}, season, {
+        total: detail.success ? detail.total : 0,
+        players: detail.success ? detail.players : []
+      });
+    })
+  };
+}
+
+/**
+ * OP-058 Phase B: lightweight ranking bootstrap.
+ * Returns only season metadata so opening Kingdom Rankings never has to
+ * transfer every Governor from every historical KvK before the UI is usable.
+ */
+function getKingdomRankingMeta() {
+  const cache = CacheService.getScriptCache();
+  const cacheKey = 'bt:ranking:meta:v2';
+  const cached = cache.get(cacheKey);
+  if (cached) {
+    try { return JSON.parse(cached); } catch (ignore) {}
+  }
+
   const ss = getDatabase_();
   const kvkSheet = ss.getSheetByName(BT.SHEETS.KVKS);
+  if (!kvkSheet) throw new Error('BattleTrack KvK sheet is missing.');
+
+  const seasons = sheetToObjects_(kvkSheet).map(function(kvk) {
+    return {
+      kvkId: String(kvk['KvK ID'] || '').trim(),
+      number: numberOrNull_(kvk['KvK Number']),
+      seasonName: String(kvk['Season Name'] || '').trim() || ('KvK ' + (kvk['KvK Number'] || '')),
+      status: String(kvk['Status'] || '').trim()
+    };
+  }).filter(function(x) { return !!x.kvkId; })
+    .sort(function(a,b) { return numberForSort_(b.number)-numberForSort_(a.number); });
+
+  const payload = { success:true, kingdom:BT.KINGDOM, seasons:seasons };
+  try { cache.put(cacheKey, JSON.stringify(payload), 600); } catch (ignore) {}
+  return payload;
+}
+
+/**
+ * OP-058 Phase B: load one selected KvK only and cache the compact payload.
+ * Category switches (DKP/KPR/KP/Kills) then happen locally without another
+ * Apps Script round-trip.
+ */
+function getKingdomRankingSeasonData(kvkId) {
+  kvkId = String(kvkId || '').trim();
+  if (!kvkId) throw new Error('KvK ID is required.');
+
+  const cache = CacheService.getScriptCache();
+  const cacheKey = 'bt:ranking:season:v2:' + kvkId;
+  const cached = cache.get(cacheKey);
+  if (cached) {
+    try { return JSON.parse(cached); } catch (ignore) {}
+  }
+
+  const ss = getDatabase_();
   const resultSheet = ss.getSheetByName(BT.SHEETS.RESULTS);
-  if (!kvkSheet || !resultSheet) throw new Error('Required BattleTrack ranking sheets are missing.');
+  if (!resultSheet) throw new Error('BattleTrack results sheet is missing.');
 
-  const kvks = sheetToObjects_(kvkSheet);
-  const results = sheetToObjects_(resultSheet);
-  const byKvk = {};
-
-  results.forEach(row => {
-    const kvkId = String(row['KvK ID'] || '').trim();
+  const players = [];
+  sheetToObjects_(resultSheet).forEach(function(row) {
+    if (String(row['KvK ID'] || '').trim() !== kvkId) return;
     const governorId = normalizeId_(row['Governor ID']);
-    if (!kvkId || !governorId) return;
+    if (!governorId) return;
     const deads = Number(row['KvK Deads']) || 0;
     const t4 = Number(row['KvK T4 Kills']) || 0;
     const t5 = Number(row['KvK T5 Kills']) || 0;
     const kp = Number(row['KvK Kill Points']) || 0;
     const startPower = Number(row['Start Power']) || 0;
-    if (!byKvk[kvkId]) byKvk[kvkId] = [];
-    byKvk[kvkId].push({
+    players.push({
       governorId: governorId,
       governorName: String(row['Governor Name'] || '').trim() || ('Governor ' + governorId),
       dkp: (deads * 10) + (t4 * 5) + (t5 * 15),
@@ -516,22 +560,9 @@ function getKingdomRankingData() {
     });
   });
 
-  // v1.5.0.1: return each player only once. Ranking/sorting happens in the
-  // browser, avoiding four duplicated ranking arrays in every response.
-  const seasons = kvks.map(kvk => {
-    const kvkId = String(kvk['KvK ID'] || '').trim();
-    const players = byKvk[kvkId] || [];
-    return {
-      kvkId: kvkId,
-      number: numberOrNull_(kvk['KvK Number']),
-      seasonName: String(kvk['Season Name'] || '').trim() || ('KvK ' + (kvk['KvK Number'] || '')),
-      status: String(kvk['Status'] || '').trim(),
-      total: players.length,
-      players: players
-    };
-  }).filter(x => x.kvkId && x.total > 0).sort((a,b) => numberForSort_(b.number)-numberForSort_(a.number));
-
-  return { success:true, kingdom:BT.KINGDOM, seasons:seasons };
+  const payload = { success:true, kvkId:kvkId, total:players.length, players:players };
+  try { cache.put(cacheKey, JSON.stringify(payload), 600); } catch (ignore) {}
+  return payload;
 }
 
 
