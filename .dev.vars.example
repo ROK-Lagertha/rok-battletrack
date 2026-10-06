@@ -1,0 +1,4 @@
+# Local-only Cloudflare Worker secrets go here during API migration.
+# Never commit .dev.vars.
+# GOOGLE_SERVICE_ACCOUNT_JSON=
+# BATTLETRACK_SPREADSHEET_ID=

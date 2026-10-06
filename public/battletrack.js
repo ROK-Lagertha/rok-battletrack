@@ -1,0 +1,1256 @@
+const $ = id => document.getElementById(id);
+
+let fullRankingData=null;
+let fullRankingMetric='dkp';
+const fullRankingCache={};
+let kingdomStatsData=null;
+
+function toggleHowItWorks(force){
+  const panel=$('howItWorksPanel');
+  const shouldOpen=force==null ? panel.hidden : !!force;
+  panel.hidden=!shouldOpen;
+  if(shouldOpen) panel.scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+function toggleAbout(force){
+  const panel=$('aboutPanel');
+  const shouldOpen=force==null ? panel.hidden : !!force;
+  panel.hidden=!shouldOpen;
+  if(shouldOpen) panel.scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+function toggleFaq(force){
+  const panel=$('faqPanel');
+  const shouldOpen=force==null ? panel.hidden : !!force;
+  panel.hidden=!shouldOpen;
+  if(shouldOpen) panel.scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+// v1.7.2.1 - Player FAQ single-open accordion
+document.addEventListener('toggle',event=>{
+  const current=event.target;
+  if(!(current instanceof HTMLDetailsElement)||!current.open)return;
+  const list=current.closest('.faq-list');
+  if(!list)return;
+  list.querySelectorAll('details[open]').forEach(item=>{
+    if(item!==current)item.open=false;
+  });
+},true);
+
+function toggleKingdomStats(force){
+  const panel=$('kingdomStatsPanel');
+  const shouldOpen=force==null ? panel.hidden : !!force;
+  panel.hidden=!shouldOpen;
+  if(!shouldOpen) return;
+  panel.scrollIntoView({behavior:'smooth',block:'start'});
+  if(kingdomStatsData){ renderKingdomStats(); return; }
+  $('kingdomStatsMeta').textContent='Loading Kingdom statistics…';
+  google.script.run
+    .withSuccessHandler(data=>{
+      if(!data?.success){ $('kingdomStatsMeta').textContent='Kingdom statistics could not be loaded.'; return; }
+      kingdomStatsData=data;
+      $('kingdomStatsSeason').innerHTML=(data.seasons||[]).map(s=>`<option value="${esc(s.kvkId)}">${esc(s.seasonName)}</option>`).join('');
+      renderKingdomStats();
+    })
+    .withFailureHandler(err=>{ $('kingdomStatsMeta').textContent=err?.message||'Kingdom statistics could not be loaded.'; })
+    .getKingdomStatsData();
+}
+
+function renderKingdomStats(){
+  if(!kingdomStatsData) return;
+  const select=$('kingdomStatsSeason');
+  const season=(kingdomStatsData.seasons||[]).find(s=>s.kvkId===select.value) || kingdomStatsData.seasons?.[0];
+  if(!season) return;
+  $('kingdomStatsMeta').textContent=`${season.seasonName}${season.status?' · '+season.status:''}`;
+  $('kingdomTotalKp').textContent=num(season.totalKp);
+  $('kingdomTotalKills').textContent=num(season.totalKills);
+  $('kingdomTotalDeads').textContent=num(season.totalDeads);
+  $('kingdomTrackedGovernors').textContent=num(season.trackedGovernors);
+  renderKingdomProgress();
+}
+
+function renderKingdomProgress(){
+  if(!kingdomStatsData) return;
+  const seasons=(kingdomStatsData.seasons||[]).slice().sort((a,b)=>(Number(a.number)||0)-(Number(b.number)||0));
+  const metrics=[
+    {key:'totalKp',label:'TOTAL KP'},
+    {key:'totalKills',label:'TOTAL KILLS'},
+    {key:'totalDeads',label:'TOTAL DEADS'},
+    {key:'trackedGovernors',label:'TRACKED GOVERNORS'}
+  ];
+  const grid=$('kingdomProgressGrid');
+  if(!grid) return;
+  grid.innerHTML=metrics.map(metric=>{
+    const max=Math.max(...seasons.map(s=>Number(s[metric.key])||0),1);
+    const points=seasons.map((s,i)=>{
+      const value=Number(s[metric.key])||0;
+      const prev=i?Number(seasons[i-1][metric.key])||0:null;
+      const pct=prev===null?null:(prev===0?(value===0?0:null):((value-prev)/prev)*100);
+      const delta=pct===null?'BASELINE':`${pct>=0?'+':''}${pct.toFixed(1)}%`;
+      const cls=pct===null?'neutral':pct>0?'up':pct<0?'down':'neutral';
+      const height=Math.max(8,(value/max)*100);
+      return `<div class="progress-season"><div class="progress-bar-wrap"><div class="progress-bar" style="height:${height}%"></div></div><strong>${num(value)}</strong><span>${esc(s.seasonName)}</span><em class="${cls}">${delta}</em></div>`;
+    }).join('');
+    return `<article class="progress-card"><div class="progress-card-title">${metric.label}</div><div class="progress-seasons">${points}</div></article>`;
+  }).join('');
+}
+
+function setFullRankingLoading(isLoading,message){
+  const select=$('fullRankingSeason');
+  if(select) select.disabled=!!isLoading;
+  document.querySelectorAll('.full-ranking-tab').forEach(btn=>btn.disabled=!!isLoading);
+  if(message && $('fullRankingMeta')) $('fullRankingMeta').textContent=message;
+}
+
+function clearFullRankingCacheForSeason(kvkId){
+  ['dkp','kpr','kp','kills'].forEach(metric=>delete fullRankingCache[kvkId+'|'+metric]);
+}
+
+function buildFullRankingCache(season){
+  if(!season) return;
+  const metrics=['dkp','kpr','kp','kills'];
+  metrics.forEach(metric=>{
+    const cacheKey=season.kvkId+'|'+metric;
+    if(fullRankingCache[cacheKey]) return;
+    const ordered=(season.players||[]).slice().sort((a,b)=>{
+      const diff=Number(b[metric]||0)-Number(a[metric]||0);
+      return diff!==0 ? diff : String(a.governorId).localeCompare(String(b.governorId));
+    });
+    let lastValue=null,lastRank=0;
+    fullRankingCache[cacheKey]=ordered.map((player,index)=>{
+      const metricValue=Number(player[metric]||0);
+      if(lastValue===null || metricValue!==lastValue){ lastRank=index+1; lastValue=metricValue; }
+      const value=metric==='kpr' ? (metricValue*100).toFixed(2)+'%' : num(metricValue);
+      return `<tr><td class="full-rank">#${num(lastRank)}</td><td><strong>${esc(player.governorName)}</strong><small>ID ${esc(player.governorId)}</small></td><td class="full-value">${value}</td></tr>`;
+    }).join('');
+  });
+}
+
+let fullRankingRequestId=0;
+
+function toggleFullRanking(force){
+  const panel=$('fullRankingPanel');
+  const shouldOpen=force==null ? panel.hidden : !!force;
+  panel.hidden=!shouldOpen;
+  if(!shouldOpen) return;
+  panel.scrollIntoView({behavior:'smooth',block:'start'});
+  if(fullRankingData){
+    const select=$('fullRankingSeason');
+    if(select?.value) loadFullRankingSeason(select.value);
+    return;
+  }
+
+  setFullRankingLoading(true,'Loading ranking seasons…');
+  google.script.run
+    .withSuccessHandler(data=>{
+      if(!data?.success || !(data.seasons||[]).length){
+        setFullRankingLoading(false,'Kingdom ranking could not be loaded.');
+        return;
+      }
+      fullRankingData={success:true,kingdom:data.kingdom,seasons:(data.seasons||[]).map(s=>({...s,players:null,total:null}))};
+      const select=$('fullRankingSeason');
+      select.innerHTML=fullRankingData.seasons.map(s=>`<option value="${esc(s.kvkId)}">${esc(s.seasonName)}</option>`).join('');
+      select.disabled=false;
+      loadFullRankingSeason(select.value);
+    })
+    .withFailureHandler(err=>{
+      setFullRankingLoading(false,(err?.message||'Kingdom ranking could not be loaded.')+' Close and reopen to retry.');
+    })
+    .getKingdomRankingMeta();
+}
+
+function loadFullRankingSeason(kvkId){
+  if(!fullRankingData || !kvkId) return;
+  const season=(fullRankingData.seasons||[]).find(s=>s.kvkId===kvkId);
+  if(!season) return;
+  const select=$('fullRankingSeason');
+  if(select && select.value!==kvkId) select.value=kvkId;
+
+  if(Array.isArray(season.players)){
+    setFullRankingLoading(false);
+    buildFullRankingCache(season);
+    renderFullRanking();
+    return;
+  }
+
+  const requestId=++fullRankingRequestId;
+  setFullRankingLoading(true,`Loading ${season.seasonName} ranking…`);
+  if($('fullRankingBody')) $('fullRankingBody').innerHTML='';
+
+  google.script.run
+    .withSuccessHandler(data=>{
+      if(requestId!==fullRankingRequestId) return;
+      if(!data?.success){
+        setFullRankingLoading(false,'Kingdom ranking could not be loaded.');
+        return;
+      }
+      season.players=data.players||[];
+      season.total=Number(data.total)||season.players.length;
+      clearFullRankingCacheForSeason(season.kvkId);
+      buildFullRankingCache(season);
+      setFullRankingLoading(false);
+      renderFullRanking();
+    })
+    .withFailureHandler(err=>{
+      if(requestId!==fullRankingRequestId) return;
+      setFullRankingLoading(false,(err?.message||'Kingdom ranking could not be loaded.')+' Change season or reopen to retry.');
+    })
+    .getKingdomRankingSeasonData(kvkId);
+}
+
+function renderFullRanking(){
+  if(!fullRankingData) return;
+  const select=$('fullRankingSeason');
+  const season=(fullRankingData.seasons||[]).find(s=>s.kvkId===select.value) || fullRankingData.seasons?.[0];
+  if(!season) return;
+  if(!Array.isArray(season.players)){ loadFullRankingSeason(season.kvkId); return; }
+  const labels={dkp:'DKP',kpr:'KPR',kp:'KP',kills:'KILLS'};
+  const cacheKey=season.kvkId+'|'+fullRankingMetric;
+  if(!fullRankingCache[cacheKey]) buildFullRankingCache(season);
+  const wrap=document.querySelector('.full-ranking-table-wrap');
+  const scrollTop=wrap ? wrap.scrollTop : 0;
+  $('fullRankingValueHead').textContent=labels[fullRankingMetric];
+  $('fullRankingMeta').textContent=`${season.seasonName} · ${num(season.total)} Governors`;
+  $('fullRankingBody').innerHTML=fullRankingCache[cacheKey]||'';
+  if(wrap) wrap.scrollTop=scrollTop;
+  document.querySelectorAll('.full-ranking-tab').forEach(btn=>{
+    btn.disabled=false;
+    btn.classList.toggle('active',btn.dataset.fullRanking===fullRankingMetric);
+  });
+  if(select) select.disabled=false;
+}
+
+document.addEventListener('click',e=>{
+  const btn=e.target.closest('.full-ranking-tab');
+  if(btn && !btn.disabled){
+    const next=btn.dataset.fullRanking;
+    if(next===fullRankingMetric) return;
+    fullRankingMetric=next;
+    requestAnimationFrame(renderFullRanking);
+  }
+});
+
+function searchGovernor(){
+  const id = $('governorId').value.trim();
+  const btn = $('searchBtn');
+  $('message').className='message';
+  $('dashboard').hidden=true;
+
+  if(!/^\d+$/.test(id)){
+    showMessage('Please enter a valid numeric Governor ID.', true);
+    return;
+  }
+
+  btn.disabled=true;
+  btn.textContent='SEARCHING…';
+  showMessage('Searching BattleTrack…');
+
+  google.script.run
+    .withSuccessHandler(data=>{
+      btn.disabled=false; btn.textContent='SEARCH';
+      if(!data || !data.success){
+        showMessage(data?.error?.message || 'Governor could not be loaded.', true);
+        return;
+      }
+      showMessage('');
+      renderDashboard(data);
+    })
+    .withFailureHandler(err=>{
+      btn.disabled=false; btn.textContent='SEARCH';
+      showMessage(err?.message || 'BattleTrack request failed.', true);
+    })
+    .getPlayerData(id);
+}
+
+$('governorId').addEventListener('keydown', e=>{
+  if(e.key==='Enter') searchGovernor();
+});
+
+function showMessage(text,isError=false){
+  $('message').textContent=text;
+  $('message').className='message'+(isError?' error':'');
+}
+
+function renderDashboard(data){
+  const g=data.governor||{}, s=data.summary||{}, k=data.currentKvk;
+  $('playerName').textContent=g.name||'Unknown Governor';
+  $('playerMeta').textContent=`ID ${g.id||'—'} · Kingdom ${g.kingdom||'—'} · First seen: ${g.firstSeenSeason||g.firstSeenKvk||'—'}`;
+  $('trackedKvks').textContent=s.trackedKvks??0;
+  $('passedKvks').textContent=s.passedKvks??0;
+
+  if(!k){
+    previousKvkRanking=null;
+    previousKvkLabel='';
+    $('currentStatus').textContent='NO KVK DATA';
+    $('currentStatus').className='status-pill';
+    $('currentKvkNo').textContent='—';
+    $('classification').textContent='—';
+    $('dkpRankingCard').hidden=true;
+    $('currentPanel').hidden=true;
+  }else{
+    $('currentPanel').hidden=false;
+    $('currentKvkNo').textContent=k.seasonName||'—';
+    $('classification').textContent=(k.classification||'—').replace('_',' ');
+    $('seasonTitle').textContent=k.seasonName||`KvK ${k.number??'—'}`;
+    setStatus(k.status);
+    const p=k.performance||{}, pow=k.power||{}, prog=k.progress||{};
+    $('killPoints').textContent=num(p.killPoints);
+    $('t4Kills').textContent=num(p.t4Kills);
+    $('t5Kills').textContent=num(p.t5Kills);
+    $('deads').textContent=num(p.deads);
+    $('startPower').textContent=num(pow.start);
+    $('powerChange').textContent=signed(pow.change);
+    const historyRows=data.history||[];
+    const currentIndex=historyRows.findIndex(row=>row.id===k.id);
+    const previousRow=currentIndex>0 ? historyRows[currentIndex-1] : null;
+    previousKvkRanking=normalizeRanking(previousRow?.ranking||null);
+    previousKvkLabel=previousRow?.seasonName || (previousRow?.number!=null ? `KvK ${previousRow.number}` : '');
+    renderRanking(k.ranking);
+    setProgress('kill',prog.kills,p.t4t5Kills,k.requirements?.kills,'Kills');
+    setProgress('dead',prog.deads,p.deads,k.requirements?.deads,'Deads');
+    setProgress('overall',prog.overall);
+  }
+
+  governorProgressHistory=data.history||[];
+  renderGovernorProgress();
+  renderHistory(data.history||[]);
+  $('dashboard').hidden=false;
+}
+
+
+let activeRankingMetric='dkp';
+let currentRanking=null;
+let previousKvkRanking=null;
+let previousKvkLabel='';
+let governorProgressMetric='dkp';
+let governorProgressHistory=[];
+
+function ensureRankingTabs(){
+  const title=$('rankingTitle');
+  if(!title) return;
+  let head=title.parentElement;
+  if(!head) return;
+  if(!head.classList.contains('ranking-head')) head.classList.add('ranking-head');
+  if(head.querySelector('.ranking-tabs')) return;
+
+  const tabs=document.createElement('div');
+  tabs.className='ranking-tabs';
+  tabs.setAttribute('role','group');
+  tabs.setAttribute('aria-label','Ranking category');
+  tabs.innerHTML=['dkp','kpr','kp','kills'].map((metric,index)=>
+    `<button type="button" class="ranking-tab${index===0?' active':''}" data-ranking="${metric}">${metric.toUpperCase()}</button>`
+  ).join('');
+  head.appendChild(tabs);
+}
+
+function normalizeRanking(ranking){
+  if(!ranking) return null;
+  if(ranking.categories) return ranking;
+
+  // Safe fallback for a cached/legacy v1.4.0 DKP payload.
+  if(ranking.rank!=null && ranking.total!=null){
+    return {
+      dkp: ranking.dkp,
+      rank: ranking.rank,
+      total: ranking.total,
+      categories:{
+        dkp:{value:ranking.dkp,rank:ranking.rank,total:ranking.total}
+      }
+    };
+  }
+  return null;
+}
+
+function renderRanking(ranking){
+  const card=$('dkpRankingCard');
+  ensureRankingTabs();
+  currentRanking=normalizeRanking(ranking);
+  if(!card || !currentRanking){
+    if(card) card.hidden=true;
+    return;
+  }
+  card.hidden=false;
+  const preferred=currentRanking.categories?.[activeRankingMetric] ? activeRankingMetric : 'dkp';
+  setRankingMetric(preferred);
+}
+
+function setRankingMetric(metric){
+  const item=currentRanking?.categories?.[metric];
+  if(!item) return;
+  activeRankingMetric=metric;
+  const labels={dkp:'DKP',kp:'KP',kills:'KILLS',kpr:'KPR'};
+  const label=labels[metric]||metric.toUpperCase();
+  $('rankingTitle').textContent='KINGDOM '+label+' RANKING';
+  $('rankingValueLabel').textContent='YOUR '+label;
+  $('dkpRank').textContent='#'+num(item.rank);
+  $('dkpTotal').textContent='of '+num(item.total)+' Governors';
+  renderRankChange(metric,item);
+  const percentile=$('rankingPercentile');
+  if(percentile){
+    const ahead=item.aheadPercent!=null
+      ? Number(item.aheadPercent)
+      : (item.total ? Math.max(0,((item.total-item.rank)/item.total)*100) : 0);
+    percentile.textContent='Ahead of '+ahead.toFixed(1)+'% of Governors';
+  }
+  $('dkpScore').textContent=metric==='kpr' ? (Number(item.value||0)*100).toFixed(2)+'%' : num(item.value);
+  renderRankingNeighborhood(item.neighborhood||[],metric);
+  document.querySelectorAll('.ranking-tab').forEach(btn=>{
+    btn.classList.toggle('active',btn.dataset.ranking===metric);
+    btn.disabled=!currentRanking?.categories?.[btn.dataset.ranking];
+  });
+}
+
+function renderRankChange(metric,currentItem){
+  const line=document.querySelector('.dkp-rank-line');
+  if(!line) return;
+  let host=$('rankingChange');
+  if(!host){
+    host=document.createElement('div');
+    host.id='rankingChange';
+    host.className='ranking-change';
+    line.insertAdjacentElement('afterend',host);
+  }
+
+  const previousItem=previousKvkRanking?.categories?.[metric];
+  if(!previousItem || previousItem.rank==null || currentItem?.rank==null){
+    host.innerHTML='<span class="rank-change-neutral">—</span><small>No previous KvK comparison</small>';
+    return;
+  }
+
+  const previousRank=Number(previousItem.rank);
+  const currentRank=Number(currentItem.rank);
+  const delta=previousRank-currentRank;
+
+  if(delta>0){
+    host.innerHTML=`<span class="rank-change-up">▲ ${num(delta)}</span><small>Previous KvK: #${num(previousRank)}${previousKvkLabel?' · '+esc(previousKvkLabel):''}</small>`;
+  }else if(delta<0){
+    host.innerHTML=`<span class="rank-change-down">▼ ${num(Math.abs(delta))}</span><small>Previous KvK: #${num(previousRank)}${previousKvkLabel?' · '+esc(previousKvkLabel):''}</small>`;
+  }else{
+    host.innerHTML=`<span class="rank-change-neutral">— SAME RANK</span><small>Previous KvK: #${num(previousRank)}${previousKvkLabel?' · '+esc(previousKvkLabel):''}</small>`;
+  }
+}
+
+function renderRankingNeighborhood(rows,metric){
+  const host=$('rankingNeighborhood');
+  if(!host) return;
+  if(!rows.length){ host.innerHTML=''; host.hidden=true; return; }
+  host.hidden=false;
+  host.innerHTML=rows.map(row=>{
+    const value=metric==='kpr' ? (Number(row.value||0)*100).toFixed(2)+'%' : num(row.value);
+    const name=esc(row.governorName||('Governor '+row.governorId));
+    return `<div class="ranking-neighbor${row.isCurrent?' is-current':''}">
+      <span class="neighbor-rank">#${num(row.rank)}</span>
+      <span class="neighbor-name">${name}${row.isCurrent?' <b>YOU</b>':''}</span>
+      <span class="neighbor-value">${value}</span>
+    </div>`;
+  }).join('');
+}
+
+document.addEventListener('click',e=>{
+  const btn=e.target.closest('.ranking-tab');
+  if(btn && !btn.disabled) setRankingMetric(btn.dataset.ranking);
+});
+
+
+function setStatus(status){
+  $('currentStatus').textContent=(status||'—').replace('_',' ');
+  $('currentStatus').className='status-pill '+String(status||'').toLowerCase().replaceAll('_','-');
+}
+
+function setProgress(prefix,value,achieved=null,requirement=null,unit=''){
+  const label=$(prefix+'Pct'), bar=$(prefix+'Bar'), detail=$(prefix+'RequirementDetail');
+  if(value==null){ label.textContent='N/A'; bar.style.width='0%'; if(detail)detail.textContent='N/A'; return; }
+  const pct=Math.round(Number(value)*100)/100;
+  label.textContent=pct+'%';
+  bar.style.width=Math.max(0,Math.min(100,pct))+'%';
+  if(detail){
+    if(achieved==null || requirement==null){ detail.textContent='N/A'; return; }
+    const remaining=Math.max(0,Number(requirement)-Number(achieved));
+    detail.innerHTML=`<strong>${num(achieved)} / ${num(requirement)} ${esc(unit)}</strong><span>${remaining>0?num(remaining)+' '+esc(unit)+' remaining':'Requirement completed ✓'}</span>`;
+  }
+}
+
+function governorMetricValue(kvk,metric){
+  const p=kvk?.performance||{};
+  const r=normalizeRanking(kvk?.ranking||null);
+  const ranked=r?.categories?.[metric];
+  if(ranked?.value!=null) return Number(ranked.value)||0;
+  if(metric==='kp') return Number(p.killPoints)||0;
+  if(metric==='kills') return Number(p.t4t5Kills)||((Number(p.t4Kills)||0)+(Number(p.t5Kills)||0));
+  if(metric==='dkp') return ((Number(p.deads)||0)*10)+((Number(p.t4Kills)||0)*5)+((Number(p.t5Kills)||0)*15);
+  if(metric==='kpr'){
+    const start=Number(kvk?.power?.start)||0;
+    return start>0 ? (Number(p.killPoints)||0)/start : 0;
+  }
+  return 0;
+}
+
+function renderGovernorProgress(){
+  const host=$('governorProgressChart');
+  const panel=$('governorProgressPanel');
+  if(!host||!panel) return;
+  const history=(governorProgressHistory||[]).slice().sort((a,b)=>(Number(a.number)||0)-(Number(b.number)||0)).slice(-3);
+  if(!history.length){ panel.hidden=true; return; }
+  panel.hidden=false;
+  const metric=governorProgressMetric;
+  const values=history.map(k=>governorMetricValue(k,metric));
+  const max=Math.max(...values,1);
+  const labels={dkp:'DKP',kpr:'KPR',kp:'KP',kills:'KILLS'};
+  const formatValue=v=>metric==='kpr' ? (Number(v)*100).toFixed(2)+'%' : num(v);
+  $('governorProgressMeta').textContent=history.length===1?'1 tracked KvK':`${history.length} tracked KvKs · ${labels[metric]}`;
+  host.innerHTML=history.map((k,i)=>{
+    const value=values[i], previous=i>0?values[i-1]:null;
+    const delta=previous==null?null:value-previous;
+    const pct=previous==null?null:(previous===0?(value===0?0:null):((value-previous)/previous)*100);
+    const height=Math.max(10,(value/max)*100);
+    const change=pct==null
+      ? '<span class="trend-baseline">BASELINE</span>'
+      : `<span class="${delta>0?'trend-up':delta<0?'trend-down':'trend-neutral'}">${delta>0?'▲':delta<0?'▼':'—'} ${Math.abs(pct).toFixed(1)}%</span>`;
+    return `<article class="governor-trend-season">
+      <div class="governor-trend-value">${formatValue(value)}</div>
+      <div class="governor-trend-bar-wrap"><i style="height:${height}%"></i></div>
+      <strong>${esc(k.seasonName||('KvK '+(k.number??'—')))}</strong>
+      ${change}
+    </article>`;
+  }).join('');
+  document.querySelectorAll('.governor-progress-tab').forEach(btn=>btn.classList.toggle('active',btn.dataset.progressMetric===metric));
+}
+
+
+document.addEventListener('click',e=>{
+  const toggle=e.target.closest('#governorProgressToggle');
+  if(!toggle) return;
+  const panel=$('governorProgressPanel');
+  const collapsed=panel.classList.toggle('collapsed');
+  toggle.setAttribute('aria-expanded',String(!collapsed));
+});
+
+
+document.addEventListener('click',e=>{
+  const toggle=e.target.closest('#historyToggle');
+  if(!toggle) return;
+  const panel=$('historyPanel');
+  const collapsed=panel.classList.toggle('collapsed');
+  toggle.setAttribute('aria-expanded',String(!collapsed));
+});
+
+document.addEventListener('click',e=>{
+  const btn=e.target.closest('.governor-progress-tab');
+  if(!btn) return;
+  const metric=btn.dataset.progressMetric;
+  if(metric===governorProgressMetric) return;
+  governorProgressMetric=metric;
+  renderGovernorProgress();
+});
+
+function renderHistory(items){
+  const historyMeta=$('historyToggleMeta');
+  if(historyMeta) historyMeta.textContent=(items||[]).length===1?'1 tracked KvK':`${(items||[]).length} tracked KvKs`;
+  const root=$('history');
+  root.innerHTML='';
+  if(!items.length){
+    root.innerHTML='<div class="muted">No KvK history available.</div>';
+    return;
+  }
+
+  const ordered=[...items].reverse();
+  let showAll=false;
+
+  const draw=()=>{
+    root.innerHTML='';
+    const visible=showAll?ordered:ordered.slice(0,3);
+
+    visible.forEach(k=>{
+      const item=document.createElement('article');
+      item.className='history-item';
+
+      const summary=document.createElement('button');
+      summary.type='button';
+      summary.className='history-row history-toggle';
+      summary.setAttribute('aria-expanded','false');
+      summary.innerHTML=`
+        <div class="kvk">KvK ${esc(k.number??'—')}</div>
+        <div><strong>${esc(k.seasonName||'Season')}</strong><div class="muted">${esc((k.classification||'—').replaceAll('_',' '))}</div></div>
+        <div class="result ${esc(k.status||'')}">${esc((k.status||'—').replaceAll('_',' '))}</div>
+        <div class="history-deads">${num(k.performance?.deads)} deads <span class="history-chevron">⌄</span></div>`;
+
+      const details=document.createElement('div');
+      details.className='history-details';
+      details.hidden=true;
+
+      const p=k.performance||{}, pow=k.power||{}, prog=k.progress||{}, req=k.requirements||{};
+      details.innerHTML=`
+        <div class="history-detail-grid">
+          ${detailCard('Kill Points',num(p.killPoints))}
+          ${detailCard('T4 Kills',num(p.t4Kills))}
+          ${detailCard('T5 Kills',num(p.t5Kills))}
+          ${detailCard('Deads',num(p.deads))}
+          ${detailCard('Start Power',num(pow.start))}
+          ${detailCard('Power Change',signed(pow.change))}
+        </div>
+        <div class="history-progress-grid">
+          ${historyProgress('Kills Requirement',prog.kills,req.kills,p.t4t5Kills,'Kills')}
+          ${historyProgress('Deads Requirement',prog.deads,req.deads,p.deads,'Deads')}
+          ${historyProgress('Overall Progress',prog.overall,null)}
+        </div>`;
+
+      summary.addEventListener('click',()=>{
+        const open=summary.getAttribute('aria-expanded')==='true';
+
+        root.querySelectorAll('.history-item.open').forEach(other=>{
+          if(other===item)return;
+          other.classList.remove('open');
+          const otherToggle=other.querySelector('.history-toggle');
+          const otherDetails=other.querySelector('.history-details');
+          if(otherToggle)otherToggle.setAttribute('aria-expanded','false');
+          if(otherDetails)otherDetails.hidden=true;
+        });
+
+        summary.setAttribute('aria-expanded',String(!open));
+        details.hidden=open;
+        item.classList.toggle('open',!open);
+      });
+
+      item.appendChild(summary);
+      item.appendChild(details);
+      root.appendChild(item);
+    });
+
+    if(ordered.length>3){
+      const more=document.createElement('button');
+      more.type='button';
+      more.className='history-more';
+      more.textContent=showAll?'SHOW RECENT KVKs':`SHOW OLDER KVKs (${ordered.length-3})`;
+      more.addEventListener('click',()=>{
+        showAll=!showAll;
+        draw();
+      });
+      root.appendChild(more);
+    }
+  };
+
+  draw();
+}
+
+function detailCard(label,value){
+  return `<div class="history-detail-card"><span>${esc(label)}</span><strong>${esc(value)}</strong></div>`;
+}
+
+function historyProgress(label,value,requirement,achieved=null,unit=''){
+  const pct=value==null?null:Math.round(Number(value)*100)/100;
+  const width=pct==null?0:Math.max(0,Math.min(100,pct));
+  const remaining=requirement!=null&&achieved!=null?Math.max(0,Number(requirement)-Number(achieved)):null;
+  const req=requirement==null?'<small aria-hidden="true">&nbsp;</small>':`<small>${num(achieved)} / ${num(requirement)} ${esc(unit)} · ${remaining>0?num(remaining)+' remaining':'completed ✓'}</small>`;
+  return `<div class="history-progress">
+    <div><span>${esc(label)}</span><strong>${pct==null?'N/A':pct+'%'}</strong></div>
+    ${req}
+    <div class="progress-track"><i style="width:${width}%"></i></div>
+  </div>`;
+}
+
+function num(v){
+  return v==null?'—':new Intl.NumberFormat('en-US').format(Number(v));
+}
+function signed(v){
+  if(v==null)return '—';
+  const n=Number(v); return (n>0?'+':'')+num(n);
+}
+function esc(v){
+  return String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+
+const metricInfoContent={
+  dkp:{title:'DKP · Dead & Kill Points',text:'BattleTrack performance score combining combat losses and high-tier kills.',formula:'Formula: (Deads × 10) + (T4 Kills × 5) + (T5 Kills × 15)'},
+  kpr:{title:'KPR · Kill Points Ratio',text:'Shows KvK Kill Points in relation to the Governor’s Start Power. BattleTrack displays the ratio as a percentage.',formula:'Formula: KvK Kill Points ÷ Start Power × 100'},
+  kp:{title:'KP · Kill Points',text:'Total Kill Points gained by the Governor during the selected KvK.',formula:'Value: KvK Kill Points'},
+  kills:{title:'KILLS · T4 + T5',text:'Total high-tier troop kills gained during the selected KvK.',formula:'Formula: T4 Kills + T5 Kills'}
+};
+
+function showMetricInfo(event,scope){
+  event.preventDefault();
+  event.stopPropagation();
+  const metric=scope==='full' ? fullRankingMetric : (typeof activeRankingMetric!=='undefined' ? activeRankingMetric : 'dkp');
+  const info=metricInfoContent[metric]||metricInfoContent.dkp;
+  const pop=$('metricInfoPopover');
+  $('metricInfoTitle').textContent=info.title;
+  $('metricInfoText').textContent=info.text;
+  $('metricInfoFormula').textContent=info.formula;
+  pop.hidden=false;
+  if(window.innerWidth>760){
+    const r=event.currentTarget.getBoundingClientRect();
+    const width=340;
+    const left=Math.max(14,Math.min(window.innerWidth-width-14,r.right-width));
+    pop.style.left=left+'px';
+    pop.style.top=Math.min(window.innerHeight-190,r.bottom+10)+'px';
+    pop.style.right='auto';pop.style.bottom='auto';
+  }
+}
+function closeMetricInfo(){const pop=$('metricInfoPopover');if(pop) pop.hidden=true;}
+document.addEventListener('click',e=>{const pop=$('metricInfoPopover');if(pop&&!pop.hidden&&!pop.contains(e.target)&&!e.target.closest('.metric-info-btn')) closeMetricInfo();});
+document.addEventListener('keydown',e=>{if(e.key==='Escape') closeMetricInfo();});
+
+
+// v1.7.5.1 - Collapsible BattleTrack navigation
+function toggleBattletrackMenu(forceOpen) {
+  const menu = document.getElementById('menuDropdown');
+  const toggle = document.getElementById('menuToggle');
+  if (!menu || !toggle) return;
+  const shouldOpen = typeof forceOpen === 'boolean' ? forceOpen : menu.hidden;
+  menu.hidden = !shouldOpen;
+  toggle.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
+}
+
+function menuAction(action) {
+  toggleBattletrackMenu(false);
+  if (typeof action === 'function') action();
+}
+
+document.addEventListener('click', function(event) {
+  const nav = document.querySelector('.battletrack-menu');
+  const menu = document.getElementById('menuDropdown');
+  if (nav && menu && !menu.hidden && !nav.contains(event.target)) {
+    toggleBattletrackMenu(false);
+  }
+});
+
+document.addEventListener('keydown', function(event) {
+  if (event.key === 'Escape') toggleBattletrackMenu(false);
+});
+
+
+
+// v1.9.0 - OP-047 Leadership Admin Center foundation
+let adminSessionToken = sessionStorage.getItem('btAdminSession') || '';
+
+function openAdminAccess(){
+  toggleBattletrackMenu(false);
+  if(adminSessionToken){
+    google.script.run.withSuccessHandler(function(result){
+      if(result && result.ok){ showAdminCenter(result.user); }
+      else { clearAdminSession(); openAdminLogin(); }
+    }).withFailureHandler(function(){ clearAdminSession(); openAdminLogin(); }).adminValidateSession(adminSessionToken);
+    return;
+  }
+  openAdminLogin();
+}
+function openAdminLogin(){
+  const modal=document.getElementById('adminLoginModal'); if(!modal)return;
+  modal.hidden=false; document.body.style.overflow='hidden';
+  const msg=document.getElementById('adminLoginMessage'); if(msg){msg.textContent='';msg.classList.remove('success');}
+  setTimeout(()=>{const u=document.getElementById('adminUsername');if(u)u.focus();},40);
+}
+function closeAdminLogin(){const modal=document.getElementById('adminLoginModal');if(modal)modal.hidden=true;document.body.style.overflow='';}
+function submitAdminLogin(){
+  const user=(document.getElementById('adminUsername')||{}).value||'';
+  const pass=(document.getElementById('adminPassword')||{}).value||'';
+  const btn=document.getElementById('adminLoginBtn'); const msg=document.getElementById('adminLoginMessage');
+  if(!user||!pass){if(msg)msg.textContent='Enter username and password.';return;}
+  if(btn){btn.disabled=true;btn.textContent='AUTHENTICATING…';} if(msg)msg.textContent='';
+  google.script.run.withSuccessHandler(function(result){
+    if(btn){btn.disabled=false;btn.textContent='LOGIN';}
+    if(result&&result.ok){adminSessionToken=result.token;sessionStorage.setItem('btAdminSession',adminSessionToken);closeAdminLogin();showAdminCenter(result.user);document.getElementById('adminPassword').value='';return;}
+    if(msg)msg.textContent=result&&result.code==='NOT_CONFIGURED'?'Admin access is not configured yet.':'Invalid username or password.';
+  }).withFailureHandler(function(){if(btn){btn.disabled=false;btn.textContent='LOGIN';}if(msg)msg.textContent='Admin login is temporarily unavailable.';}).adminLogin(user,pass);
+}
+function showAdminCenter(user){
+  const panel=document.getElementById('adminPanel');if(!panel)return;
+  panel.hidden=false; const b=document.getElementById('adminOpenBtn');if(b)b.classList.add('is-authenticated');
+  const label=document.getElementById('adminSessionLabel');if(label)label.textContent=user?('SIGNED IN · '+String(user).toUpperCase()):'SECURE SESSION';
+  panel.scrollIntoView({behavior:'smooth',block:'start'});
+}
+function logoutAdmin(){
+  const token=adminSessionToken; clearAdminSession(); const panel=document.getElementById('adminPanel');if(panel)panel.hidden=true;
+  if(token)google.script.run.adminLogout(token);
+}
+function clearAdminSession(){adminSessionToken='';sessionStorage.removeItem('btAdminSession');const b=document.getElementById('adminOpenBtn');if(b)b.classList.remove('is-authenticated');}
+document.addEventListener('keydown',function(e){if(e.key==='Escape'){const m=document.getElementById('adminLoginModal');if(m&&!m.hidden)closeAdminLogin();}if(e.key==='Enter'&&!document.getElementById('adminLoginModal')?.hidden)submitAdminLogin();});
+
+
+// Kingdom Scan safe preview + KvK / snapshot assignment
+let scanAssignmentState = { file:null, valid:false, importing:false, fileName:'', extension:'', sizeMb:'', rows:null, columns:null, kvks:[], selectedKvk:null, snapshotType:'' };
+function openScanUpload(){
+  if(!adminSessionToken){ openAdminAccess(); return; }
+  const modal=document.getElementById('scanUploadModal'); if(!modal)return;
+  modal.hidden=false; document.body.style.overflow='hidden';
+  resetScanAssignment();
+  loadScanAssignmentKvks();
+}
+function closeScanUpload(){
+  const modal=document.getElementById('scanUploadModal'); if(modal)modal.hidden=true;
+  document.body.style.overflow='';
+}
+function showScanUploadCompletePopup(){
+  const existing=document.getElementById('scanUploadCompletePopup');if(existing)existing.remove();
+  const popup=document.createElement('div');
+  popup.id='scanUploadCompletePopup';
+  popup.className='scan-upload-complete-popup';
+  popup.setAttribute('role','status');
+  popup.setAttribute('aria-live','polite');
+  popup.innerHTML='<div class="scan-upload-complete-icon">✓</div><strong>Upload complete</strong><span>Snapshot integrity verified</span>';
+  document.body.appendChild(popup);
+  requestAnimationFrame(()=>popup.classList.add('show'));
+  setTimeout(()=>{popup.classList.remove('show');setTimeout(()=>popup.remove(),220);},1800);
+}
+function resetScanAssignment(){
+  scanAssignmentState={file:null,valid:false,importing:false,fileName:'',extension:'',sizeMb:'',rows:null,columns:null,kvks:[],selectedKvk:null,snapshotType:''};
+  const input=document.getElementById('kingdomScanFile'); if(input)input.value='';
+  const box=document.getElementById('scanValidationResult'); if(box){box.hidden=true;box.innerHTML='';}
+  const panel=document.getElementById('scanAssignmentPanel'); if(panel)panel.hidden=true;
+  const summary=document.getElementById('scanAssignmentSummary'); if(summary){summary.hidden=true;summary.innerHTML='';}
+  const type=document.getElementById('scanSnapshotType'); if(type)type.value='';
+}
+function loadScanAssignmentKvks(){
+  const sel=document.getElementById('scanTargetKvk'); if(sel)sel.innerHTML='<option value="">Loading KvKs…</option>';
+  google.script.run.withSuccessHandler(function(result){
+    if(!result||!result.ok){
+      if(result&&result.code==='SESSION_EXPIRED'){clearAdminSession();closeScanUpload();openAdminLogin();return;}
+      if(sel)sel.innerHTML='<option value="">KvK list unavailable</option>'; return;
+    }
+    scanAssignmentState.kvks=result.kvks||[];
+    if(sel)sel.innerHTML='<option value="">SELECT KVK / SEASON</option>'+scanAssignmentState.kvks.map(function(k){
+      const closed=k.comparisonMode==='START_END'||['historical','completed','closed'].includes(String(k.status||'').toLowerCase());
+      return '<option value="'+esc(k.id)+'"'+(closed?' disabled':'')+'>KvK '+k.number+' · '+esc(k.seasonName||k.id)+(closed?' · CLOSED — SCAN IMPORTS DISABLED':'')+'</option>';
+    }).join('');
+  }).withFailureHandler(function(){if(sel)sel.innerHTML='<option value="">KvK list unavailable</option>';}).adminGetLeadershipKvks(adminSessionToken);
+}
+function scanEscape(value){
+  return String(value==null?'':value).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});
+}
+function scanDelimiter(line){
+  const options=[',',';','\t']; let best=',', count=-1;
+  options.forEach(function(d){const n=(line.split(d).length-1);if(n>count){count=n;best=d;}}); return best;
+}
+function setScanValidated(meta){
+  scanAssignmentState.file=meta.file||null;
+  scanAssignmentState.valid=true;
+  scanAssignmentState.fileName=meta.fileName||'';
+  scanAssignmentState.extension=meta.extension||'';
+  scanAssignmentState.sizeMb=meta.sizeMb||'';
+  scanAssignmentState.rows=meta.rows;
+  scanAssignmentState.columns=meta.columns;
+  const panel=document.getElementById('scanAssignmentPanel'); if(panel)panel.hidden=false;
+  updateScanAssignment();
+}
+function validateKingdomScan(file){
+  const box=document.getElementById('scanValidationResult'); if(!box||!file)return;
+  scanAssignmentState.file=file; scanAssignmentState.valid=false; scanAssignmentState.selectedKvk=null; scanAssignmentState.snapshotType='';
+  const panel=document.getElementById('scanAssignmentPanel'); if(panel)panel.hidden=true;
+  const summary=document.getElementById('scanAssignmentSummary'); if(summary){summary.hidden=true;summary.innerHTML='';}
+  const type=document.getElementById('scanSnapshotType'); if(type)type.value='';
+  const target=document.getElementById('scanTargetKvk'); if(target)target.value='';
+  box.hidden=false; box.innerHTML='<div class="scan-working">VALIDATING SCAN…</div>';
+  const name=file.name||'Kingdom scan'; const ext=(name.split('.').pop()||'').toLowerCase();
+  const size=(file.size/1024/1024).toFixed(2);
+  if(!['csv','txt','xlsx'].includes(ext)){
+    box.innerHTML='<div class="scan-status bad">FILE NOT SUPPORTED</div><p>Use CSV, TXT or XLSX.</p>'; return;
+  }
+  if(ext==='xlsx'){
+    box.innerHTML='<div class="scan-working">VALIDATING XLSX ON SECURE BACKEND…</div><div class="scan-file-meta"><strong>'+scanEscape(name)+'</strong><span>'+size+' MB · XLSX</span></div><p>The workbook is checked in memory. Nothing is written to Drive or the BattleTrack database.</p>';
+    const reader=new FileReader();
+    reader.onerror=function(){box.innerHTML='<div class="scan-status bad">COULD NOT READ XLSX</div>';};
+    reader.onload=function(){
+      const dataUrl=String(reader.result||''); const base64=dataUrl.indexOf(',')>=0?dataUrl.split(',')[1]:'';
+      google.script.run.withSuccessHandler(function(result){
+        if(!result||!result.ok){
+          if(result&&result.code==='SESSION_EXPIRED'){clearAdminSession();closeScanUpload();openAdminLogin();return;}
+          box.innerHTML='<div class="scan-status bad">XLSX VALIDATION FAILED</div><div class="scan-file-meta"><strong>'+scanEscape(name)+'</strong><span>'+size+' MB · XLSX</span></div><p>'+scanEscape((result&&result.message)||'The workbook could not be validated.')+'</p>';
+          return;
+        }
+        box.innerHTML='<div class="scan-status good">SCAN VALIDATED</div><div class="scan-file-meta"><strong>'+scanEscape(name)+'</strong><span>'+size+' MB · XLSX</span></div><div class="scan-check-grid"><div><span>DATA SHEET</span><strong>'+scanEscape(result.sheetName)+'</strong></div><div><span>GOVERNORS</span><strong>'+Number(result.governors||0).toLocaleString()+'</strong></div><div><span>GOVERNOR IDS</span><strong>'+Number(result.uniqueGovernorIds||0).toLocaleString()+' unique</strong></div><div><span>BATTLE FIELDS</span><strong>OK</strong></div></div><div class="scan-columns"><span>Validation</span><p>'+Number(result.columns||0)+' columns · '+(result.kingdom?('Kingdom '+scanEscape(result.kingdom)+' · '):'')+'0 duplicate IDs · 0 missing IDs · numeric battle fields OK</p></div><p class="scan-preview-foot">Validated in memory on the protected BattleTrack backend. No Drive or database write occurred.</p>';
+        setScanValidated({file:file,fileName:name,extension:ext,sizeMb:size,rows:Number(result.governors||0),columns:Number(result.columns||0),sheetName:result.sheetName,kingdom:result.kingdom});
+      }).withFailureHandler(function(err){box.innerHTML='<div class="scan-status bad">XLSX VALIDATION FAILED</div><p>'+scanEscape(err&&err.message?err.message:'Backend validation is temporarily unavailable.')+'</p>';}).adminValidateKingdomScanXlsx(adminSessionToken,{fileName:name,base64:base64});
+    };
+    reader.readAsDataURL(file); return;
+  }
+  const reader=new FileReader();
+  reader.onerror=function(){box.innerHTML='<div class="scan-status bad">COULD NOT READ FILE</div>';};
+  reader.onload=function(){
+    const text=String(reader.result||'').replace(/^\uFEFF/,''); const lines=text.split(/\r?\n/).filter(function(x){return x.trim()!=='';});
+    if(!lines.length){box.innerHTML='<div class="scan-status bad">EMPTY FILE</div>';return;}
+    const delim=scanDelimiter(lines[0]); const headers=lines[0].split(delim).map(function(x){return x.trim().replace(/^"|"$/g,'');});
+    const sample=lines.slice(1,6).map(function(line){return line.split(delim);});
+    const consistent=sample.every(function(r){return r.length===headers.length;});
+    const normalized=headers.map(function(h){return h.toLowerCase().replace(/[^a-z0-9]/g,'');});
+    const governorHints=['governorid','governor','playerid','id'];
+    const hasId=normalized.some(function(h){return governorHints.includes(h);});
+    const status=consistent?'SCAN STRUCTURE READABLE':'CHECK COLUMN STRUCTURE';
+    box.innerHTML='<div class="scan-status '+(consistent?'good':'warn')+'">'+status+'</div><div class="scan-file-meta"><strong>'+scanEscape(name)+'</strong><span>'+size+' MB · '+lines.length.toLocaleString()+' rows · '+headers.length+' columns</span></div><div class="scan-check-grid"><div><span>HEADER</span><strong>'+headers.length+' detected</strong></div><div><span>ROWS</span><strong>'+Math.max(0,lines.length-1).toLocaleString()+' data rows</strong></div><div><span>GOVERNOR ID</span><strong>'+(hasId?'candidate found':'not confirmed')+'</strong></div><div><span>WRITE STATUS</span><strong>NO IMPORT</strong></div></div><div class="scan-columns"><span>Detected columns</span><p>'+headers.slice(0,14).map(scanEscape).join(' · ')+(headers.length>14?' · …':'')+'</p></div><p class="scan-preview-foot">Validation is non-destructive. Assign the validated scan to a KvK and snapshot type below.</p>';
+    if(consistent)setScanValidated({file:file,fileName:name,extension:ext,sizeMb:size,rows:Math.max(0,lines.length-1),columns:headers.length});
+  };
+  reader.readAsText(file);
+}
+function updateScanAssignment(){
+  const kvkId=(document.getElementById('scanTargetKvk')||{}).value||'';
+  const snapshot=(document.getElementById('scanSnapshotType')||{}).value||'';
+  const kvk=(scanAssignmentState.kvks||[]).find(function(k){return k.id===kvkId;})||null;
+  scanAssignmentState.selectedKvk=kvk; scanAssignmentState.snapshotType=snapshot;
+  const summary=document.getElementById('scanAssignmentSummary'); if(!summary)return;
+  const closed=kvk&&(kvk.comparisonMode==='START_END'||['historical','completed','closed'].includes(String(kvk.status||'').toLowerCase()));
+  if(closed){summary.hidden=false;summary.innerHTML='<div class="scan-status bad">CLOSED — SCAN IMPORTS DISABLED</div><p>This KvK is historical and protected. BattleTrack will not accept START, MIDDLE or END scans for it.</p>';return;}
+  if(!scanAssignmentState.valid||!kvk||!snapshot){summary.hidden=true;summary.innerHTML='';return;}
+  const rowText=scanAssignmentState.rows===null?'Validation pending':Number(scanAssignmentState.rows).toLocaleString()+' Governors';
+  summary.innerHTML='<div class="scan-status good">READY FOR CONTROLLED IMPORT</div><div class="scan-summary-grid"><div><span>KVK</span><strong>KvK '+scanEscape(kvk.number)+' · '+scanEscape(kvk.seasonName||kvk.id)+'</strong></div><div><span>SNAPSHOT</span><strong>'+scanEscape(snapshot)+'</strong></div><div><span>SCAN</span><strong>'+scanEscape(scanAssignmentState.fileName)+'</strong></div><div><span>DATA</span><strong>'+scanEscape(rowText)+'</strong></div></div><p>The XLSX will be re-validated, archived unchanged and committed as a BattleTrack raw snapshot. KvK Results will not be changed.</p>'+(scanAssignmentState.extension==='xlsx'?'<button id="scanImportBtn" type="button" class="scan-import-btn" onclick="importAssignedKingdomScan()">IMPORT SCAN</button>':'<div class="scan-import-note">Controlled import currently supports validated XLSX scans.</div>');
+  summary.hidden=false;
+}
+
+
+
+function importAssignedKingdomScan(){
+  if(scanAssignmentState.importing)return;
+  const file=scanAssignmentState.file,kvk=scanAssignmentState.selectedKvk,snapshot=scanAssignmentState.snapshotType;
+  if(!file||!scanAssignmentState.valid||!kvk||!snapshot||scanAssignmentState.extension!=='xlsx')return;
+  const modal=document.getElementById('scanImportConfirmModal'); if(!modal)return;
+  const fileEl=document.getElementById('scanConfirmFile'); if(fileEl)fileEl.textContent=scanAssignmentState.fileName||'Kingdom scan';
+  const targetEl=document.getElementById('scanConfirmTarget'); if(targetEl)targetEl.textContent=kvk.id+' / '+snapshot;
+  const rowsEl=document.getElementById('scanConfirmRows'); if(rowsEl)rowsEl.textContent=Number(scanAssignmentState.rows||0).toLocaleString()+' governor rows';
+  modal.hidden=false;
+}
+function closeScanImportConfirmation(){
+  const modal=document.getElementById('scanImportConfirmModal'); if(modal)modal.hidden=true;
+}
+function confirmAssignedKingdomScanImport(){
+  if(scanAssignmentState.importing)return;
+  closeScanImportConfirmation();
+  executeAssignedKingdomScanImport();
+}
+function executeAssignedKingdomScanImport(){
+  if(scanAssignmentState.importing)return;
+  const file=scanAssignmentState.file,kvk=scanAssignmentState.selectedKvk,snapshot=scanAssignmentState.snapshotType;
+  const summary=document.getElementById('scanAssignmentSummary');
+  if(!file||!scanAssignmentState.valid||!kvk||!snapshot||scanAssignmentState.extension!=='xlsx')return;
+  scanAssignmentState.importing=true;
+  const btn=document.getElementById('scanImportBtn'); if(btn){btn.disabled=true;btn.textContent='IMPORTING…';}
+  const reader=new FileReader();
+  reader.onerror=function(){scanAssignmentState.importing=false;if(btn){btn.disabled=false;btn.textContent='IMPORT SCAN';}alert('The XLSX could not be read for import.');};
+  reader.onload=function(){
+    const dataUrl=String(reader.result||''); const base64=dataUrl.indexOf(',')>=0?dataUrl.split(',')[1]:'';
+    google.script.run.withSuccessHandler(function(result){
+      scanAssignmentState.importing=false;
+      if(!result||!result.ok){
+        if(result&&result.code==='SESSION_EXPIRED'){clearAdminSession();closeScanUpload();openAdminLogin();return;}
+        if(btn){btn.disabled=false;btn.textContent='IMPORT SCAN';}
+        const msg=(result&&result.message)||'Controlled import failed.';
+        if(summary){
+          if(result&&result.code==='DRIVE_AUTH_REQUIRED'&&result.authorizationUrl){
+            summary.insertAdjacentHTML('beforeend','<div class="scan-import-result bad"><strong>DRIVE AUTHORIZATION REQUIRED</strong><span>'+scanEscape(msg)+'</span><a class="scan-import-btn scan-auth-link" href="'+scanEscape(result.authorizationUrl)+'" target="_blank" rel="noopener">AUTHORIZE DRIVE</a><span>After Google confirms access, return to BattleTrack and click IMPORT SCAN again.</span></div>');
+          }else{
+            summary.insertAdjacentHTML('beforeend','<div class="scan-import-result bad"><strong>IMPORT BLOCKED</strong><span>'+scanEscape(msg)+'</span></div>');
+          }
+        }
+        return;
+      }
+      scanAssignmentState.valid=false;
+      if(summary){
+        const integrity=result.integrity||{};
+        const verified=!!integrity.complete;
+        const integrityHtml='<div class="scan-integrity '+(verified?'good':'bad')+'"><div class="scan-status '+(verified?'good':'bad')+'">'+(verified?'SNAPSHOT INTEGRITY VERIFIED':'SNAPSHOT INTEGRITY CHECK FAILED')+'</div><div class="scan-summary-grid"><div><span>EXPECTED / STORED</span><strong>'+Number(integrity.expected||result.governors||0).toLocaleString()+' / '+Number(integrity.stored||0).toLocaleString()+'</strong></div><div><span>UNIQUE IDS</span><strong>'+Number(integrity.uniqueIds||0).toLocaleString()+'</strong></div><div><span>MISSING / DUPLICATES</span><strong>'+Number(integrity.missingIds||0)+' / '+Number(integrity.duplicateIds||0)+'</strong></div><div><span>METADATA MISMATCHES</span><strong>'+Number(integrity.metadataMismatches||0)+'</strong></div></div></div>';
+        summary.innerHTML='<div class="scan-status '+(verified?'good':'bad')+'">'+(verified?'IMPORT COMPLETE':'IMPORT COMMITTED · CHECK REQUIRED')+'</div><div class="scan-summary-grid"><div><span>IMPORT ID</span><strong>'+scanEscape(result.importId)+'</strong></div><div><span>SNAPSHOT</span><strong>'+scanEscape(result.kvkId)+' · '+scanEscape(result.snapshotType)+'</strong></div><div><span>GOVERNORS</span><strong>'+Number(result.governors||0).toLocaleString()+'</strong></div><div><span>ARCHIVE</span><strong>'+scanEscape(result.archiveFileName||'Archived')+'</strong></div></div>'+integrityHtml+'<p>Original XLSX archived unchanged. Raw snapshot committed to BattleTrack. KvK Results were not modified.</p>';
+      }
+      const input=document.getElementById('kingdomScanFile');if(input)input.disabled=true;
+      const target=document.getElementById('scanTargetKvk');if(target)target.disabled=true;
+      const type=document.getElementById('scanSnapshotType');if(type)type.disabled=true;
+      if(result.integrity&&result.integrity.complete){
+        closeScanUpload();
+        showScanUploadCompletePopup();
+        const adminPanel=document.getElementById('adminPanel');
+        if(adminPanel){adminPanel.hidden=false;setTimeout(()=>adminPanel.scrollIntoView({behavior:'smooth',block:'start'}),120);}
+      }
+    }).withFailureHandler(function(err){scanAssignmentState.importing=false;if(btn){btn.disabled=false;btn.textContent='IMPORT SCAN';}if(summary)summary.insertAdjacentHTML('beforeend','<div class="scan-import-result bad"><strong>IMPORT FAILED</strong><span>'+scanEscape(err&&err.message?err.message:'Backend import failed.')+'</span></div>');}).adminImportKingdomScanXlsx(adminSessionToken,{fileName:scanAssignmentState.fileName,base64:base64,kvkId:kvk.id,snapshotType:snapshot});
+  };
+  reader.readAsDataURL(file);
+}
+
+// v1.9.2 - OP-053 KvK Management / Story Catalog
+let kvkManagementState = null;
+function openKvkManagement(){
+  if(!adminSessionToken){ openAdminAccess(); return; }
+  const modal=document.getElementById('kvkManagementModal'); if(!modal)return;
+  modal.hidden=false; document.body.style.overflow='hidden';
+  const msg=document.getElementById('kvkManagementMessage'); if(msg)msg.textContent='';
+  const sel=document.getElementById('kvkStorySelect'); if(sel)sel.innerHTML='<option value="">Loading Story Catalog…</option>';
+  google.script.run.withSuccessHandler(function(result){
+    if(!result||!result.ok){ if(result&&result.code==='SESSION_EXPIRED'){clearAdminSession();closeKvkManagement();openAdminLogin();return;} if(msg)msg.textContent=(result&&result.message)||'KvK Management could not be loaded.'; return; }
+    kvkManagementState=result;
+    document.getElementById('kvkNextNumber').textContent='KvK '+result.nextNumber;
+    document.getElementById('kvkNextId').textContent=result.nextKvkId;
+    sel.innerHTML='<option value="">SELECT STORY</option>'+(result.stories||[]).map(function(st){return '<option value="'+esc(st.name)+'">'+esc(st.name)+'</option>';}).join('');
+    updateKvkSeasonPreview();
+  }).withFailureHandler(function(){if(msg)msg.textContent='KvK Management is temporarily unavailable.';}).adminGetKvkManagementData(adminSessionToken);
+}
+function closeKvkManagement(){const modal=document.getElementById('kvkManagementModal');if(modal)modal.hidden=true;document.body.style.overflow='';}
+function updateKvkPlannedEndDate(){
+  const startEl=document.getElementById('kvkStartDate');
+  const endEl=document.getElementById('kvkEndDate');
+  if(!startEl||!endEl)return;
+  const startDate=String(startEl.value||'').trim();
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(startDate)){endEl.value='';return;}
+  const parts=startDate.split('-').map(Number);
+  const d=new Date(Date.UTC(parts[0],parts[1]-1,parts[2]));
+  d.setUTCDate(d.getUTCDate()+50);
+  endEl.value=d.toISOString().slice(0,10);
+}
+function updateKvkSeasonPreview(){
+  const n=kvkManagementState&&kvkManagementState.nextNumber;
+  const story=(document.getElementById('kvkStorySelect')||{}).value||'';
+  const el=document.getElementById('kvkSeasonPreview'); if(el)el.textContent=(n&&story)?('Season '+n+' - '+story):'Select a story';
+}
+function createNewKvk(){
+  if(!adminSessionToken){closeKvkManagement();openAdminAccess();return;}
+  const story=(document.getElementById('kvkStorySelect')||{}).value||'';
+  const startDate=(document.getElementById('kvkStartDate')||{}).value||'';
+  const endDate=(document.getElementById('kvkEndDate')||{}).value||'';
+  const msg=document.getElementById('kvkManagementMessage'); const btn=document.getElementById('createKvkBtn');
+  if(!story||!startDate||!endDate){if(msg)msg.textContent='Please select a story and enter a KvK start date.';return;}
+  const preview=(document.getElementById('kvkSeasonPreview')||{}).textContent||story;
+  if(!confirm('Create '+preview+'?\n\nStart: '+startDate+'\nEnd: '+endDate+'\n\nThis will add the KvK to the BattleTrack database.'))return;
+  if(btn){btn.disabled=true;btn.textContent='CREATING…';} if(msg)msg.textContent='';
+  google.script.run.withSuccessHandler(function(result){
+    if(btn){btn.disabled=false;btn.textContent='CREATE KVK';}
+    if(!result||!result.ok){if(result&&result.code==='SESSION_EXPIRED'){clearAdminSession();closeKvkManagement();openAdminLogin();return;}if(msg)msg.textContent=(result&&result.message)||'KvK could not be created.';return;}
+    if(msg){msg.textContent=result.kvk.seasonName+' created successfully.';msg.classList.add('success');}
+    kvkManagementState.nextNumber=result.kvk.number+1; kvkManagementState.nextKvkId='3903-KVK'+(result.kvk.number+1);
+    document.getElementById('kvkNextNumber').textContent='KvK '+kvkManagementState.nextNumber;
+    document.getElementById('kvkNextId').textContent=kvkManagementState.nextKvkId;
+    document.getElementById('kvkStorySelect').value=''; document.getElementById('kvkStartDate').value=''; document.getElementById('kvkEndDate').value=''; updateKvkSeasonPreview();
+  }).withFailureHandler(function(){if(btn){btn.disabled=false;btn.textContent='CREATE KVK';}if(msg)msg.textContent='KvK could not be created.';}).adminCreateKvk(adminSessionToken,{story:story,startDate:startDate,endDate:endDate});
+}
+
+
+
+// v1.10.0b - OP-055 Shared Leadership KvK Selector
+let leadershipKvkSelectorState = { kvks: [], selected: null };
+let leadershipComparisonState = null;
+function openLeadershipKvkSelector(){
+  if(!adminSessionToken){openAdminAccess();return;}
+  const modal=document.getElementById('leadershipKvkSelectorModal'); if(!modal)return;
+  modal.hidden=false; document.body.style.overflow='hidden';
+  const sel=document.getElementById('leadershipKvkSelect');
+  const msg=document.getElementById('leadershipKvkSelectorMessage');
+  const preview=document.getElementById('leadershipKvkSelectionPreview');
+  const btn=document.getElementById('leadershipKvkContinueBtn');
+  if(sel)sel.innerHTML='<option value="">Loading KvKs…</option>';
+  if(msg)msg.textContent=''; if(preview)preview.hidden=true; if(btn)btn.disabled=true;
+  google.script.run.withSuccessHandler(function(result){
+    if(!result||!result.ok){
+      if(result&&result.code==='SESSION_EXPIRED'){clearAdminSession();closeLeadershipKvkSelector();openAdminLogin();return;}
+      if(msg)msg.textContent=(result&&result.message)||'KvK list could not be loaded.'; return;
+    }
+    leadershipKvkSelectorState={kvks:result.kvks||[],selected:null};
+    if(sel){
+      sel.innerHTML='<option value="">SELECT KVK / SEASON</option>'+leadershipKvkSelectorState.kvks.map(function(k){
+        return '<option value="'+esc(k.id)+'">KvK '+k.number+' · '+esc(k.seasonName||k.id)+'</option>';
+      }).join('');
+    }
+  }).withFailureHandler(function(){if(msg)msg.textContent='KvK list is temporarily unavailable.';}).adminGetLeadershipKvks(adminSessionToken);
+}
+function closeLeadershipKvkSelector(){
+  const modal=document.getElementById('leadershipKvkSelectorModal'); if(modal)modal.hidden=true;
+  document.body.style.overflow='';
+}
+function updateLeadershipKvkSelection(){
+  const id=(document.getElementById('leadershipKvkSelect')||{}).value||'';
+  const k=(leadershipKvkSelectorState.kvks||[]).find(function(x){return x.id===id;})||null;
+  leadershipKvkSelectorState.selected=k;
+  const preview=document.getElementById('leadershipKvkSelectionPreview');
+  const btn=document.getElementById('leadershipKvkContinueBtn');
+  if(!k){if(preview)preview.hidden=true;if(btn)btn.disabled=true;return;}
+  if(preview)preview.hidden=false; if(btn)btn.disabled=false;
+  document.getElementById('leadershipSelectedKvk').textContent='KvK '+k.number+' · '+(k.seasonName||k.id);
+  document.getElementById('leadershipSelectedStatus').textContent=k.status||'—';
+  document.getElementById('leadershipSelectedMode').textContent=k.comparisonMode==='START_END'?'START → END':'START → LATEST';
+  document.getElementById('leadershipSelectedDates').textContent=(k.startDate||'—')+' → '+(k.comparisonMode==='START_END'?(k.endDate||'END'):'LATEST');
+}
+function confirmLeadershipKvkSelection(){
+  const k=leadershipKvkSelectorState.selected; if(!k)return;
+  const msg=document.getElementById('leadershipKvkSelectorMessage');
+  const btn=document.getElementById('leadershipKvkContinueBtn');
+  const panel=document.getElementById('leadershipComparisonPanel');
+  if(msg){msg.classList.remove('success');msg.textContent='Loading Leadership Comparison…';}
+  if(btn){btn.disabled=true;btn.textContent='LOADING COMPARISON…';}
+  if(panel)panel.hidden=true;
+  google.script.run.withSuccessHandler(function(result){
+    if(btn){btn.disabled=false;btn.textContent='REFRESH SELECTED KVK';}
+    if(!result||!result.ok){
+      if(result&&result.code==='SESSION_EXPIRED'){clearAdminSession();closeLeadershipKvkSelector();openAdminLogin();return;}
+      if(msg)msg.textContent=(result&&result.message)||'Comparison could not be loaded.'; return;
+    }
+    leadershipComparisonState=result;
+    renderLeadershipComparison(result);
+    if(msg){msg.classList.add('success');msg.textContent='KvK '+result.kvk.number+' loaded · '+result.total+' Governors · '+(result.kvk.comparisonMode==='START_END'?'START → END':'START → LATEST')+'.';}
+  }).withFailureHandler(function(){if(btn){btn.disabled=false;btn.textContent='USE SELECTED KVK';}if(msg)msg.textContent='Comparison is temporarily unavailable.';}).adminGetKvkComparison(adminSessionToken,k.id);
+}
+function renderLeadershipComparison(result){
+  const panel=document.getElementById('leadershipComparisonPanel');
+  const body=document.getElementById('leadershipComparisonBody');
+  if(!panel||!body)return;
+  document.getElementById('leadershipComparisonTitle').textContent='KvK '+result.kvk.number+' · '+(result.kvk.seasonName||result.kvk.id);
+  document.getElementById('leadershipComparisonCount').textContent=String(result.total||0);
+  const fmt=function(v){return v===null||v===undefined||v===''?'—':Number(v).toLocaleString('en-US');};
+  const pct=function(v){return v===null||v===undefined?'—':(Number(v)*100).toFixed(2)+'%';};
+  body.innerHTML=(result.rows||[]).map(function(r){
+    const req=(r.requirementStatus||'—').replace(/_/g,' ');
+    return '<tr><td>#'+r.dkpRank+'</td><td><strong>'+esc(r.governorName)+'</strong><small>'+esc(r.governorId)+'</small></td><td>'+esc(r.classification||'—')+'</td><td>'+fmt(r.startPower)+'</td><td>'+fmt(r.powerDelta)+'</td><td>'+fmt(r.killPoints)+'</td><td>'+fmt(r.t4Kills)+'</td><td>'+fmt(r.t5Kills)+'</td><td>'+fmt(r.deads)+'</td><td><strong>'+fmt(r.dkp)+'</strong></td><td>'+pct(r.kpr)+'</td><td>'+esc(req)+'</td></tr>';
+  }).join('');
+  if(!result.rows||!result.rows.length)body.innerHTML='<tr><td colspan="12" class="leadership-comparison-empty">No BattleTrack results found for this KvK.</td></tr>';
+  panel.hidden=false;
+}
+
+
+// v1.10.0d - OP-051 Leadership Comparison CSV export
+function exportLeadershipComparisonCsv(){
+  const result=leadershipComparisonState;
+  const msg=document.getElementById('leadershipKvkSelectorMessage');
+  if(!result||!result.ok||!result.kvk){
+    if(msg){msg.classList.remove('success');msg.textContent='Load a KvK comparison before exporting.';}
+    return;
+  }
+  const headers=[
+    'DKP Rank','Governor ID','Governor Name','Classification','Start Power','End/Latest Power','Power Delta',
+    'Kill Points','T4 Kills','T5 Kills','Total T4+T5 Kills','Deads','DKP','KPR %',
+    'Kill Requirement','Dead Requirement','Kill Progress %','Dead Progress %','Overall Progress %','Requirement Status'
+  ];
+  const csvValue=function(v){
+    if(v===null||v===undefined)return '';
+    const text=String(v).replace(/"/g,'""');
+    return /[;"\r\n]/.test(text)?'"'+text+'"':text;
+  };
+  const percent=function(v){return v===null||v===undefined||v===''?'':(Number(v)*100).toFixed(2);};
+  const rows=(result.rows||[]).map(function(r){return [
+    r.dkpRank,r.governorId,r.governorName,r.classification,r.startPower,r.endPower,r.powerDelta,
+    r.killPoints,r.t4Kills,r.t5Kills,r.kills,r.deads,r.dkp,percent(r.kpr),
+    r.killRequirement,r.deadRequirement,r.killProgress,r.deadProgress,r.overallProgress,r.requirementStatus
+  ];});
+  const lines=[headers].concat(rows).map(function(row){return row.map(csvValue).join(';');});
+  const csv='\uFEFF'+lines.join('\r\n');
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  const safeSeason=String(result.kvk.seasonName||result.kvk.id||'KvK').replace(/[^a-z0-9_-]+/gi,'_').replace(/^_+|_+$/g,'');
+  a.href=url;
+  a.download='ROK-BattleTrack_KvK'+result.kvk.number+'_'+safeSeason+'_Leadership-Comparison.csv';
+  document.body.appendChild(a);a.click();a.remove();
+  setTimeout(function(){URL.revokeObjectURL(url);},1000);
+  if(msg){msg.classList.add('success');msg.textContent='KvK '+result.kvk.number+' CSV exported · '+(result.total||0)+' Governors.';}
+}
+
+
+
+// v1.12.1 - OP-057 KvK Closure Workflow
+let kvkCloseState={kvks:[],selected:null,result:''};
+function openKvkCloseWorkflow(){
+  if(!adminSessionToken){openAdminAccess();return;}
+  const modal=document.getElementById('kvkCloseModal'),sel=document.getElementById('kvkCloseSelect'),msg=document.getElementById('kvkCloseMessage');if(!modal||!sel)return;
+  modal.hidden=false;document.body.style.overflow='hidden';if(msg)msg.textContent='';sel.innerHTML='<option value="">Loading open KvKs…</option>';
+  google.script.run.withSuccessHandler(function(result){
+    if(!result||!result.ok){if(result&&result.code==='SESSION_EXPIRED'){clearAdminSession();closeKvkCloseWorkflow();openAdminLogin();return;}if(msg)msg.textContent=(result&&result.message)||'KvKs could not be loaded.';return;}
+    const closed=['historical','completed','closed'];kvkCloseState.kvks=(result.kvks||[]).filter(k=>closed.indexOf(String(k.status||'').toLowerCase())===-1);
+    sel.innerHTML='<option value="">SELECT OPEN KVK</option>'+kvkCloseState.kvks.map(k=>'<option value="'+esc(k.id)+'">KvK '+k.number+' · '+esc(k.seasonName||k.id)+' · '+esc(k.status||'OPEN')+'</option>').join('');
+    if(!kvkCloseState.kvks.length&&msg)msg.textContent='No open KvK is available to close.';
+  }).withFailureHandler(function(){if(msg)msg.textContent='KvK closure data is temporarily unavailable.';}).adminGetLeadershipKvks(adminSessionToken);
+}
+function closeKvkCloseWorkflow(){const m=document.getElementById('kvkCloseModal');if(m)m.hidden=true;document.body.style.overflow='';kvkCloseState.selected=null;kvkCloseState.result='';}
+function updateKvkClosePreview(){
+  const id=(document.getElementById('kvkCloseSelect')||{}).value||'',p=document.getElementById('kvkClosePreview');kvkCloseState.selected=kvkCloseState.kvks.find(k=>k.id===id)||null;
+  if(!kvkCloseState.selected){if(p)p.hidden=true;return;} const k=kvkCloseState.selected;if(p)p.hidden=false;
+  document.getElementById('kvkClosePreviewName').textContent='KvK '+k.number+' · '+(k.seasonName||k.id);document.getElementById('kvkClosePreviewStatus').textContent=k.status||'OPEN';document.getElementById('kvkClosePreviewPlanned').textContent=k.endDate||'—';
+  const d=document.getElementById('kvkActualEndDate');if(d&&!d.value)d.value=k.endDate||new Date().toISOString().slice(0,10);
+}
+function requestKvkClose(result){
+  const k=kvkCloseState.selected,date=(document.getElementById('kvkActualEndDate')||{}).value||'',msg=document.getElementById('kvkCloseMessage');
+  if(!k){if(msg)msg.textContent='Please select an open KvK.';return;}if(!/^\d{4}-\d{2}-\d{2}$/.test(date)){if(msg)msg.textContent='Please enter the actual KvK end date.';return;}
+  kvkCloseState.result=result;document.getElementById('kvkCloseConfirmKvk').textContent='KvK '+k.number+' · '+(k.seasonName||k.id);document.getElementById('kvkCloseConfirmResult').textContent=result==='MANUAL'?'MANUAL CLOSE':result;document.getElementById('kvkCloseConfirmDate').textContent=date;
+  document.getElementById('kvkCloseConfirmModal').hidden=false;
+}
+function closeKvkCloseConfirmation(){const m=document.getElementById('kvkCloseConfirmModal');if(m)m.hidden=true;}
+function confirmKvkClose(){
+  const k=kvkCloseState.selected,date=(document.getElementById('kvkActualEndDate')||{}).value||'',result=kvkCloseState.result,btn=document.getElementById('kvkCloseConfirmBtn'),msg=document.getElementById('kvkCloseMessage');if(!k||!result)return;
+  if(btn){btn.disabled=true;btn.textContent='CLOSING PERMANENTLY…';}
+  google.script.run.withSuccessHandler(function(r){
+    if(btn){btn.disabled=false;btn.textContent='CLOSE KVK PERMANENTLY';}closeKvkCloseConfirmation();
+    if(!r||!r.ok){if(r&&r.code==='SESSION_EXPIRED'){clearAdminSession();closeKvkCloseWorkflow();openAdminLogin();return;}if(msg)msg.textContent=(r&&r.message)||'KvK could not be closed.';return;}
+    if(msg){msg.textContent='KvK closed successfully · '+(r.kvk.result||'CLOSED')+' · '+(r.kvk.actualEndDate||date);msg.classList.add('success');}
+    const sel=document.getElementById('kvkCloseSelect');if(sel)sel.disabled=true;document.querySelectorAll('.kvk-close-actions button').forEach(b=>b.disabled=true);
+  }).withFailureHandler(function(err){if(btn){btn.disabled=false;btn.textContent='CLOSE KVK PERMANENTLY';}closeKvkCloseConfirmation();if(msg)msg.textContent=(err&&err.message)||'KvK closure failed.';}).adminCloseKvk(adminSessionToken,{kvkId:k.id,result:result,actualEndDate:date});
+}
+
+// v1.12.0b - OP-050 Kingdom KvK Overview foundation
+let currentKvkOverviewState={result:null,kvks:[],selected:null};
+function openCurrentKvkOverview(){
+  if(!adminSessionToken){openAdminAccess();return;}
+  const modal=document.getElementById('currentKvkOverviewModal'),msg=document.getElementById('currentKvkOverviewMessage'),content=document.getElementById('currentKvkOverviewContent'),sel=document.getElementById('currentKvkSelect');
+  if(modal)modal.hidden=false; document.body.style.overflow='hidden';
+  if(content)content.hidden=true; if(sel)sel.innerHTML='<option value="">LOADING KVKs…</option>'; if(msg){msg.classList.remove('success');msg.textContent='Loading KvK list…';}
+  google.script.run.withSuccessHandler(function(list){
+    if(!list||!list.ok){if(list&&list.code==='SESSION_EXPIRED'){clearAdminSession();closeCurrentKvkOverview();openAdminLogin();return;}if(msg)msg.textContent=(list&&list.message)||'KvK list could not be loaded.';return;}
+    const kvks=list.kvks||[]; currentKvkOverviewState.kvks=kvks;
+    if(!kvks.length){if(msg)msg.textContent='No KvKs are available.';return;}
+    if(sel)sel.innerHTML=kvks.map(function(k){return '<option value="'+esc(k.id)+'">KVK '+k.number+' · '+esc(k.seasonName||k.id)+' · '+esc(k.status||'—')+'</option>';}).join('');
+    const preferred=kvks.find(function(k){return k.comparisonMode==='START_LATEST';})||kvks[0];
+    if(sel)sel.value=preferred.id; currentKvkOverviewState.selected=preferred;
+    loadKvkOverview(preferred.id);
+  }).withFailureHandler(function(){if(msg)msg.textContent='KvK list is temporarily unavailable.';}).adminGetLeadershipKvks(adminSessionToken);
+}
+function closeCurrentKvkOverview(){const modal=document.getElementById('currentKvkOverviewModal');if(modal)modal.hidden=true;document.body.style.overflow='';}
+function loadSelectedKvkOverview(){const id=(document.getElementById('currentKvkSelect')||{}).value||'';if(!id)return;loadKvkOverview(id);}
+function loadKvkOverview(id){
+  const msg=document.getElementById('currentKvkOverviewMessage'),content=document.getElementById('currentKvkOverviewContent');
+  const selected=(currentKvkOverviewState.kvks||[]).find(function(k){return k.id===id;})||null; currentKvkOverviewState.selected=selected;
+  if(content)content.hidden=true; if(msg){msg.classList.remove('success');msg.textContent='Loading KvK '+(selected?selected.number:'')+'…';}
+  google.script.run.withSuccessHandler(function(result){
+    if(!result||!result.ok){if(result&&result.code==='SESSION_EXPIRED'){clearAdminSession();closeCurrentKvkOverview();openAdminLogin();return;}if(msg)msg.textContent=(result&&result.message)||'KvK results could not be loaded.';return;}
+    currentKvkOverviewState.result=result; renderCurrentKvkOverview(result);
+    const mode=result.kvk.comparisonMode==='START_END'?'START → END':'START → LATEST';
+    if(msg){msg.classList.add('success');msg.textContent='KvK '+result.kvk.number+' loaded · '+result.total+' Governors · '+mode+'.';}
+    if(content)content.hidden=false;
+  }).withFailureHandler(function(){if(msg)msg.textContent='KvK results are temporarily unavailable.';}).adminGetKvkComparison(adminSessionToken,id);
+}
+function currentKvkStatusGroup(status,isHistorical){
+  const s=String(status||'').toUpperCase().replace(/\s+/g,'_');
+  if(s==='PASS'||s==='MET'||s==='REQUIREMENT_MET')return 'MET';
+  if(isHistorical)return 'NOT_MET';
+  if(s==='NOT_MET'||s==='FAIL'||s==='FAILED')return 'NOT_MET';
+  return 'IN_PROGRESS';
+}
+function currentKvkIsHistorical(){
+  const result=currentKvkOverviewState.result;
+  return !!(result&&result.kvk&&result.kvk.comparisonMode==='START_END');
+}
+function renderCurrentKvkOverview(result){
+  const rows=result.rows||[],kvk=result.kvk||{},mode=kvk.comparisonMode==='START_END'?'START → END':'START → LATEST';
+  document.getElementById('currentKvkOverviewTitle').textContent='KvK '+kvk.number+' · '+(kvk.seasonName||kvk.id);
+  document.getElementById('currentKvkOverviewMeta').textContent=(kvk.status||'—')+' · '+mode+' · '+(kvk.startDate||'—')+' → '+(kvk.comparisonMode==='START_END'?(kvk.endDate||'END'):'LATEST');
+  document.getElementById('currentKvkOverviewCount').textContent=rows.length+' GOVERNORS';
+  const historical=kvk.comparisonMode==='START_END';
+  const met=rows.filter(function(r){return currentKvkStatusGroup(r.requirementStatus,historical)==='MET';}).length;
+  const progress=rows.filter(function(r){return currentKvkStatusGroup(r.requirementStatus,historical)===(historical?'NOT_MET':'IN_PROGRESS');}).length;
+  const vals=rows.map(function(r){return Number(r.overallProgress);}).filter(Number.isFinite);
+  const avg=vals.length?vals.reduce(function(a,b){return a+b;},0)/vals.length:0;
+  document.getElementById('currentKvkTotal').textContent=rows.length.toLocaleString('en-US');
+  document.getElementById('currentKvkMet').textContent=met.toLocaleString('en-US');
+  const progressLabel=document.getElementById('currentKvkProgressLabel');if(progressLabel)progressLabel.textContent=historical?'REQUIREMENT NOT MET':'IN PROGRESS';
+  document.getElementById('currentKvkProgress').textContent=progress.toLocaleString('en-US');
+  document.getElementById('currentKvkAverage').textContent=avg.toFixed(1)+'%';
+  const statusFilter=document.getElementById('currentKvkStatusFilter');
+  if(statusFilter){
+    const prior=statusFilter.value;
+    statusFilter.innerHTML='<option value="ALL">ALL STATUS</option><option value="MET">REQUIREMENT MET</option><option value="'+(historical?'NOT_MET':'IN_PROGRESS')+'">'+(historical?'REQUIREMENT NOT MET':'IN PROGRESS')+'</option>';
+    statusFilter.value=[...statusFilter.options].some(function(o){return o.value===prior;})?prior:'ALL';
+  }
+  renderCurrentKvkOverviewRows();
+}
+function renderCurrentKvkOverviewRows(){
+  const result=currentKvkOverviewState.result,body=document.getElementById('currentKvkOverviewBody');if(!result||!body)return;
+  const q=((document.getElementById('currentKvkSearch')||{}).value||'').trim().toLowerCase();
+  const filter=((document.getElementById('currentKvkStatusFilter')||{}).value||'ALL');
+  const sort=((document.getElementById('currentKvkSort')||{}).value||'overall-asc');
+  const historical=currentKvkIsHistorical();
+  let rows=(result.rows||[]).filter(function(r){const matches=!q||String(r.governorName||'').toLowerCase().includes(q)||String(r.governorId||'').toLowerCase().includes(q);return matches&&(filter==='ALL'||currentKvkStatusGroup(r.requirementStatus,historical)===filter);});
+  const num=function(v){v=Number(v);return Number.isFinite(v)?v:0;};
+  rows.sort(function(a,b){if(sort==='overall-desc')return num(b.overallProgress)-num(a.overallProgress);if(sort==='dkp-desc')return num(b.dkp)-num(a.dkp);if(sort==='deads-desc')return num(b.deads)-num(a.deads);if(sort==='kills-desc')return num(b.kills)-num(a.kills);if(sort==='power-desc')return num(b.startPower)-num(a.startPower);return num(a.overallProgress)-num(b.overallProgress);});
+  const fmt=function(v){return v===null||v===undefined||v===''?'—':Number(v).toLocaleString('en-US');};
+  const pct=function(v){return v===null||v===undefined||v===''?'—':Number(v).toFixed(0)+'%';};
+  const ratio=function(value,target){return fmt(value)+' / '+fmt(target);};
+  body.innerHTML=rows.map(function(r){const group=currentKvkStatusGroup(r.requirementStatus,historical),label=group==='MET'?'MET':group==='NOT_MET'?'NOT MET':'IN PROGRESS';return '<tr><td><strong>'+esc(r.governorName)+'</strong><small>'+esc(r.governorId)+'</small></td><td>'+fmt(r.startPower)+'</td><td>'+fmt(r.killPoints)+'</td><td>'+fmt(r.kills)+'</td><td>'+fmt(r.deads)+'</td><td><strong>'+fmt(r.dkp)+'</strong></td><td>'+((Number(r.kpr)||0)*100).toFixed(2)+'%</td><td><div class="kvk-progress-cell"><span>'+ratio(r.kills,r.killRequirement)+'</span><b>'+pct(r.killProgress)+'</b></div></td><td><div class="kvk-progress-cell"><span>'+ratio(r.deads,r.deadRequirement)+'</span><b>'+pct(r.deadProgress)+'</b></div></td><td><strong>'+pct(r.overallProgress)+'</strong></td><td><span class="kvk-status '+group.toLowerCase()+'">'+label+'</span></td></tr>';}).join('');
+  if(!rows.length)body.innerHTML='<tr><td colspan="11" class="leadership-comparison-empty">No Governors match the current filters.</td></tr>';
+}
