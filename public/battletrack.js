@@ -1,5 +1,22 @@
 const $ = id => document.getElementById(id);
 
+const btApi={
+  async get(path){
+    const response=await fetch('/api/v1'+path,{headers:{'Accept':'application/json'}});
+    let data=null;
+    try{ data=await response.json(); }catch(ignore){}
+    if(!response.ok){
+      const error=new Error(data?.message||data?.error?.message||'BattleTrack API request failed.');
+      error.code=data?.code||data?.error?.code||'API_ERROR';
+      throw error;
+    }
+    return data;
+  },
+  rankingMeta(){ return this.get('/rankings/meta'); },
+  rankingSeason(kvkId){ return this.get('/rankings/'+encodeURIComponent(kvkId)); }
+};
+
+
 let fullRankingData=null;
 let fullRankingMetric='dkp';
 const fullRankingCache={};
@@ -141,8 +158,8 @@ function toggleFullRanking(force){
   }
 
   setFullRankingLoading(true,'Loading ranking seasons\u2026');
-  google.script.run
-    .withSuccessHandler(data=>{
+  btApi.rankingMeta()
+    .then(data=>{
       if(!data?.success || !(data.seasons||[]).length){
         setFullRankingLoading(false,'Kingdom ranking could not be loaded.');
         return;
@@ -153,10 +170,9 @@ function toggleFullRanking(force){
       select.disabled=false;
       loadFullRankingSeason(select.value);
     })
-    .withFailureHandler(err=>{
+    .catch(err=>{
       setFullRankingLoading(false,(err?.message||'Kingdom ranking could not be loaded.')+' Close and reopen to retry.');
-    })
-    .getKingdomRankingMeta();
+    });
 }
 
 function loadFullRankingSeason(kvkId){
@@ -177,8 +193,8 @@ function loadFullRankingSeason(kvkId){
   setFullRankingLoading(true,`Loading ${season.seasonName} ranking\u2026`);
   if($('fullRankingBody')) $('fullRankingBody').innerHTML='';
 
-  google.script.run
-    .withSuccessHandler(data=>{
+  btApi.rankingSeason(kvkId)
+    .then(data=>{
       if(requestId!==fullRankingRequestId) return;
       if(!data?.success){
         setFullRankingLoading(false,'Kingdom ranking could not be loaded.');
@@ -191,11 +207,10 @@ function loadFullRankingSeason(kvkId){
       setFullRankingLoading(false);
       renderFullRanking();
     })
-    .withFailureHandler(err=>{
+    .catch(err=>{
       if(requestId!==fullRankingRequestId) return;
       setFullRankingLoading(false,(err?.message||'Kingdom ranking could not be loaded.')+' Change season or reopen to retry.');
-    })
-    .getKingdomRankingSeasonData(kvkId);
+    });
 }
 
 function renderFullRanking(){

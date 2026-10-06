@@ -621,68 +621,63 @@ function getKingdomStatsData() {
 function apiGet_(e) {
 
   try {
+    const params = e && e.parameter ? e.parameter : {};
+    const action = String(params.action || '').trim();
 
-    const governorId =
-      e &&
-      e.parameter &&
-      e.parameter.governorId
-        ? String(e.parameter.governorId).trim()
-        : '';
+    // CF-009: read-only Cloudflare bridge for public Kingdom Rankings.
+    // No write/admin operation is exposed through this bridge.
+    if (action === 'rankingMeta') {
+      return jsonResponse_(getKingdomRankingMeta());
+    }
+
+    if (action === 'rankingSeason') {
+      const kvkId = String(params.kvkId || '').trim();
+      if (!kvkId) {
+        return jsonResponse_({
+          success: false,
+          error: { code: 'INVALID_KVK', message: 'KvK ID is required.' }
+        });
+      }
+      return jsonResponse_(getKingdomRankingSeasonData(kvkId));
+    }
+
+    const governorId = params.governorId
+      ? String(params.governorId).trim()
+      : '';
 
     /*
      * Wird die API ohne Governor ID aufgerufen,
      * geben wir einen einfachen Health Check zurück.
      */
     if (!governorId) {
-
       return jsonResponse_({
-
         success: true,
-
         service: 'ROK BattleTrack API',
-
         version: BT.VERSION,
-
         kingdom: BT.KINGDOM,
-
         message: 'BattleTrack API is running.'
-
       });
-
     }
-
 
     /*
      * Governor abrufen
      */
     const result = getPlayerData_(governorId);
-
     return jsonResponse_(result);
 
-
   } catch (error) {
-
     Logger.log(error);
     Logger.log(error.stack);
 
     return jsonResponse_({
-
       success: false,
-
       error: {
-
         code: 'SERVER_ERROR',
-
         message: String(error.message || error)
-
       }
-
     });
-
   }
-
 }
-
 
 
 /**
