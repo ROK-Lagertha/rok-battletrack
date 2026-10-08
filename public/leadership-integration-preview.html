@@ -1,0 +1,56 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CF-014.5 | Leadership Integration Review</title><link rel="stylesheet" href="/battletrack.css"><style>body{background:#0d101b;color:#eee;font-family:system-ui,sans-serif}.page-shell{max-width:1250px;margin:auto;padding:30px 18px}.review-note{border:1px solid #7869a3;border-radius:12px;padding:15px 20px;margin:16px 0;background:#221c37}.review-data{padding:20px;margin-top:20px;border:1px solid #534975;border-radius:14px;background:#171725}.review-data select{background:#25213a;color:#fff;padding:10px;border:1px solid #74679c;border-radius:8px;min-width:240px}.review-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin-top:14px}.review-grid article{border:1px solid #51496b;border-radius:10px;padding:12px;overflow-wrap:anywhere}.review-grid small{display:block;color:#c9bfdc;margin-bottom:7px}button:disabled{opacity:.45;cursor:not-allowed}.review-data p{line-height:1.5}</style></head><body><main class="page-shell"><div class="review-note"><strong>CF-014.5 · INTEGRATION REVIEW · READ ONLY</strong><p>Isolated preview of the existing Leadership Command Center layout. The original <code>/index.html</code> is unchanged. No write operations, no admin actions and no KvK ID allocation.</p></div><section id="adminPanel" class="panel admin-command-panel">
+      <div class="admin-command-head">
+        <div>
+          <div class="kicker">KINGDOM 3903 &#183; LEADERSHIP</div>
+          <h3>Leadership Command Center</h3>
+          <p>Internal BattleTrack workspace for Kingdom scans, current KvK monitoring and Leadership exports.</p>
+        </div>
+        <div class="admin-head-actions">
+          <span id="adminSessionLabel" class="admin-session-label">SECURE SESSION</span>
+          <span>READ-ONLY REVIEW</span>
+        </div>
+      </div>
+
+      <div class="admin-module-grid">
+        <article class="admin-module-card">
+          <h4>KvK Management</h4>
+          <p>Preview next KvK information from the protected Bridge. Creating or closing KvKs is disabled.</p>
+          <div class="admin-module-actions"><button type="button" disabled title="Disabled in read-only integration review">ADD NEW KVK</button><button type="button" disabled title="Disabled in read-only integration review">CLOSE KVK</button></div>
+          <small>Create or safely close a tracked KvK</small>
+        </article>
+        <article class="admin-module-card">
+          <h4>Kingdom Scan</h4>
+          <p>Select a Kingdom scan and validate it locally before any future import into BattleTrack.</p>
+          <button type="button" disabled title="Disabled in read-only integration review">UPLOAD KINGDOM SCAN</button>
+          <small>Preview only &#183; no database or Drive changes</small>
+        </article>
+        <article class="admin-module-card">
+          <h4>Current KvK Overview</h4>
+          <p>Leadership view for Governor performance, Requirements and current progress.</p>
+          <button type="button" disabled title="Disabled in read-only integration review">OPEN KVK OVERVIEW</button>
+          <small>Available when scan data exists for the selected KvK</small>
+        </article>
+        <article class="admin-module-card">
+          <h4>Comparison &amp; Export</h4>
+          <p>Select any tracked KvK as the source for Leadership comparison and future exports.</p>
+          <button type="button" disabled title="Disabled in read-only integration review">SELECT KVK</button>
+          <small>Historical: START &#8594; END &#183; Active: START &#8594; LATEST</small>
+        </article>
+      </div>
+    </section><section class="review-data"><div class="kicker">SIGNED MANAGEMENT DATA</div><h3>Existing KvK Selector · Bridge Integration Review</h3><p id="status" role="status">Checking Leadership authorization…</p><div id="content" hidden><label for="kvkSelect">SELECT KVK</label> <select id="kvkSelect"></select><div class="review-grid"><article><small>Selected KvK</small><strong id="selectedId">—</strong></article><article><small>Story</small><strong id="selectedStory">—</strong></article><article><small>Start</small><strong id="selectedStart">—</strong></article><article><small>End</small><strong id="selectedEnd">—</strong></article><article><small>Status</small><strong id="selectedStatus">—</strong></article><article><small>Reserved next ID (not created)</small><strong id="nextId">—</strong></article></div><p id="count"></p></div></section></main><script>
+'use strict';
+(async()=>{
+ const status=document.getElementById('status'), content=document.getElementById('content');
+ try{
+  const response=await fetch('/api/v1/leadership/kvks',{credentials:'same-origin',cache:'no-store'});
+  if(!response.ok)throw Error('Leadership authorization failed (HTTP '+response.status+').');
+  const result=await response.json();
+  if(!result.ok||!result.data?.ok||!Array.isArray(result.data.kvks))throw Error('Unexpected bridge response.');
+  const data=result.data, list=data.kvks, select=document.getElementById('kvkSelect');
+  const set=(id,value)=>document.getElementById(id).textContent=value??'—';
+  for(const kvk of list){const option=document.createElement('option');option.value=kvk.id;option.textContent='KvK '+kvk.number+' · '+kvk.seasonName;select.append(option)}
+  function render(){const kvk=list.find(x=>x.id===select.value);if(!kvk)return;set('selectedId',kvk.id);set('selectedStory',kvk.seasonName);set('selectedStart',kvk.startDate);set('selectedEnd',kvk.endDate);set('selectedStatus',kvk.status)}
+  select.addEventListener('change',render);set('nextId',data.nextKvkId);set('count',list.length+' tracked KvKs · '+(data.stories?.length??0)+' story variants · no changes saved');render();content.hidden=false;status.textContent='Signed KvK data loaded successfully. Read-only.';
+ }catch(error){status.textContent=error.message+' No KvK data displayed.'}
+})();
+</script></body></html>
