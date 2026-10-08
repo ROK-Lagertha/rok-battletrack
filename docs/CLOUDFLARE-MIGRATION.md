@@ -26,3 +26,10 @@ Deploy command: `npx wrangler deploy`
 Build command: none required for this migration stage.
 
 Important: the Cloudflare Worker project name must match `rok-battletrack` from `wrangler.jsonc`.
+
+### CF-012 – Discord OAuth2 authentication (test phase)
+- Endpoints: `/api/auth/discord/login`, `/api/auth/discord/callback`, `/api/auth/discord/me`, `/api/auth/discord/logout`.
+- Both Officer and Data guild roles are required, checked with `guilds.members.read` on every `/me` request. Session is AES-GCM encrypted in a Secure HttpOnly SameSite=Lax cookie, max 60 minutes. OAuth state is short-lived and authenticated.
+- A `DISCORD LOGIN · TEST` link is visible in the main navigation. It tests login but **does not unlock any legacy Admin functions**. Existing Apps Script login is unchanged.
+- Required production secrets: `DISCORD_CLIENT_SECRET`, `SESSION_SECRET`. OAuth redirect: `https://rok-battletrack.jici1203.workers.dev/api/auth/discord/callback`.
+- Verify authorized user, one-role user, non-member, state replay/expiry, logout. Admin APIs require a later secured migration.

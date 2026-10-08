@@ -1,3 +1,4 @@
+import { discordAuth } from "./discord-auth.js";
 const JSON_HEADERS = {
   "content-type": "application/json; charset=utf-8",
   "cache-control": "no-store"
@@ -101,6 +102,11 @@ async function playerLookup(env, governorId) {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+
+    if (url.pathname.startsWith("/api/auth/discord/")) {
+      try { return await discordAuth(request, env, url.pathname); }
+      catch (error) { console.error("Discord OAuth error", error); return apiError(503, "AUTH_UNAVAILABLE", "Discord login temporarily unavailable."); }
+    }
 
     if (url.pathname === "/api/health") {
       return json({
