@@ -1,7 +1,7 @@
 # ⚔️ ROK BattleTrack – Kingdom 3903
 
-**Current development release: v1.12.2b**  
-**Pre-Cloudflare migration baseline: v1.12.2b**  
+**Cloudflare migration: CF-009 / CF-010 / CF-011 live-tested (2026-10-08)**  
+**Apps Script reference baseline: v1.12.2b**  
 **Verified stable baseline: v1.11.5.2**
 
 ROK BattleTrack is a mobile-first **Rise of Kingdoms performance and analytics WebApp for Kingdom 3903**. It turns prepared KvK tracking data from Google Sheets into clear personal battle profiles, requirement progress, historical comparisons, Kingdom rankings and Kingdom-wide analytics.
@@ -269,7 +269,19 @@ The same responsive layout is used across desktop and mobile rather than maintai
 
 ## 🏗️ Architecture
 
-`Google Sheets → Google Apps Script backend → BattleTrack WebApp`
+**Current Cloudflare public read path:** `Cloudflare static frontend → Cloudflare Worker /api/v1 → Google Apps Script WebApp → Google Sheets`  
+**Legacy/reference path:** `Google Apps Script WebApp → Google Sheets`
+
+### Cloudflare deployment
+- `public/` — static application assets (HTML, CSS, JavaScript).
+- `src/index.js` — Cloudflare Worker and public API routing.
+- `wrangler.jsonc` — Worker/static asset configuration.
+- `APPS_SCRIPT_API_URL` — production Worker runtime secret containing the deployed Apps Script `/exec` URL; never commit its value.
+- `/api/health` — public health endpoint.
+- `/api/v1/rankings/meta` — list of available KvK seasons.
+- `/api/v1/rankings/:kvkId` — ranking data for one KvK, preserving the 10-minute cache behavior.
+- `/api/v1/players/:governorId` — public governor lookup and existing player profile payload.
+- Unmigrated `/api/*` routes return `NOT_MIGRATED`; do not treat them as active functionality.
 
 ### Apps Script source
 - `apps-script/Code.gs` — backend, database access and BattleTrack payloads.
@@ -332,7 +344,26 @@ Open before broader/public distribution: document ownership of BattleTrack code/
 Planned as a future player/Kingdom analytics feature. Highest Acclaim and Acclaim Ratio should remain separate performance indicators and use the raw values already available to BattleTrack.
 
 ### Cloudflare migration
-v1.12.2b is the pre-migration functional baseline. New architecture work should be regression-tested against the current Apps Script behavior before new feature development continues.
+v1.12.2b remains the functional Apps Script reference baseline. Cloudflare migration is incremental and is **not** a full replacement of the Apps Script backend or Google Sheets database.
+
+| Work item | Status | Verified behavior |
+| --- | --- | --- |
+| CF-008 | Complete | Versioned `/api/v1` API contract documented in `docs/CLOUDFLARE-API-CONTRACT.md` |
+| CF-009 | Complete | Cloudflare-to-Apps-Script bridge; rankings API; temporary diagnostics removed after testing |
+| CF-010 | Complete | Governor ID lookup migrated to the Cloudflare API and confirmed in live UI |
+| CF-011 | Complete | Kingdom rankings covered by CF-009: KvK2/3/4, category and season switching, reload |
+| CF-012 | Next | Leadership authentication: secure Cloudflare sessions, authorization and logout |
+
+**Confirmed live on 2026-10-08:** Kingdom 3903 historical KvK2, KvK3 and KvK4 ranking metadata, DKP/KPR/KP/KILLS selection, season switching, reload, and public Governor Lookup. No change to ranking formulas, existing player calculations, scan imports or KvK closure rules.
+
+### CF-012 — Leadership authentication safety boundary
+- The current Apps Script admin login remains the reference until Cloudflare auth passes dedicated tests.
+- Cloudflare must validate credentials and authorization **server-side**; UI visibility alone does not grant access.
+- Use secure, short-lived, HttpOnly cookies (Secure, SameSite), CSRF protection for state-changing requests, explicit logout and server-side session invalidation.
+- Support multiple Leadership accounts without embedding passwords, hashes, session tokens or privileged API keys in public assets or Git history.
+- Protect every Leadership API endpoint, including read operations; avoid relying on a shared secret passed from the browser to Apps Script as proof of user authorization.
+- Preserve controlled import, integrity readback, historical/closed KvK write protection and rollback compatibility.
+- Do not migrate or expose Admin write endpoints before authentication and authorization are verified.
 
 ## 🔒 Repository & data scope
 This public repository is intended for:
@@ -351,7 +382,11 @@ It should **not** contain:
 
 ## 🏷️ Release status
 
-### v1.12.2b — Current development / pre-Cloudflare migration baseline
+### Cloudflare migration — CF-009 through CF-011 live-tested (2026-10-08)
+- Rankings and Governor Lookup served via Cloudflare Worker API, with Apps Script and Google Sheets as current data source.
+- CF-012 Leadership authentication pending.
+
+### v1.12.2b — Apps Script reference baseline
 Highlights:
 - OP-050 Leadership Kingdom KvK Overview Phase 1 live-tested.
 - OP-057 KvK Closure Phase 1 with permanent final confirmation and historical scan protection.
@@ -360,7 +395,7 @@ Highlights:
 - Full Kingdom Ranking menu/category switching live-tested successfully after fresh load, reload and Season changes.
 - Existing DKP/KPR/KP/KILLS formulas and business rules remain unchanged.
 
-This version is the reference baseline for the upcoming Cloudflare migration.
+This version remains the regression and rollback reference during the ongoing Cloudflare migration.
 
 ### v1.11.5.2 — Verified stable baseline
 - OP-061 Mobile Scan UX & Success Flow.
