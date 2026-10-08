@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en"><head><meta charset="utf-8"/><meta content="width=device-width,initial-scale=1" name="viewport"/><title>BattleTrack | Leadership Feature Preservation Preview</title><link href="/battletrack.css" rel="stylesheet"/><style>
+<html lang="en"><head><meta charset="utf-8"/><meta content="width=device-width,initial-scale=1" name="viewport"/><title>BattleTrack | Leadership Comparison CF-015.2.1</title><link href="/battletrack.css" rel="stylesheet"/><style>
 body{background:#0d101b;color:#eee;font-family:system-ui,sans-serif}
 .page-shell{max-width:1250px;margin:auto;padding:30px 18px}
 .admin-command-panel{display:block}
@@ -14,7 +14,7 @@ body{background:#0d101b;color:#eee;font-family:system-ui,sans-serif}
 .native-kvk-data .next-kvk{border-top:1px solid #33465a;margin-top:9px;padding-top:9px;font-size:12px}
 .native-kvk-data .next-kvk strong{color:#e4bf69}
 .admin-module-card button:disabled{opacity:.45;cursor:not-allowed}
-.native-selection-context{font-size:12px;color:#d7b86a;margin-top:12px;line-height:1.5}
+.comparison-actions{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}.comparison-actions button{padding:9px 12px}.comparison-actions button:not(:disabled){cursor:pointer}.comparison-table-wrap{max-height:450px;overflow:auto;margin-top:12px;border:1px solid #33465a;border-radius:8px}.comparison-table{border-collapse:collapse;width:100%;font-size:12px}.comparison-table th,.comparison-table td{padding:8px 10px;border-bottom:1px solid #33465a;text-align:left;white-space:nowrap}.comparison-table th{color:#d7b86a;position:sticky;top:0;background:#101b27}.comparison-state{font-size:12px;color:#b8c7d6;line-height:1.6}.native-selection-context{font-size:12px;color:#d7b86a;margin-top:12px;line-height:1.5}
 @media(max-width:650px){.native-kvk-data .native-kvk-grid{grid-template-columns:1fr}}
 </style></head><body><main class="page-shell"><section class="panel admin-command-panel" id="adminPanel">
 <div class="admin-command-head">
@@ -31,10 +31,10 @@ body{background:#0d101b;color:#eee;font-family:system-ui,sans-serif}
 <div class="admin-module-grid">
 <article class="admin-module-card">
 <h4>KvK Management</h4>
-<p>Preview next KvK information from the protected Bridge. Creating or closing KvKs is disabled.</p>
+<p>Select the KvK for Leadership. Creating or closing KvKs remains disabled.</p>
 <div class="admin-module-actions"><button disabled="" title="Disabled in read-only integration review" type="button">ADD NEW KVK</button><button disabled="" title="Disabled in read-only integration review" type="button">CLOSE KVK</button></div>
 <small>Create or safely close a tracked KvK</small>
-<div class="native-kvk-data"><p id="status" role="status">Checking Leadership authorization…</p><div hidden="" id="content"><label for="kvkSelect">SELECT KVK</label> <select id="kvkSelect"></select><div class="native-kvk-grid"><article><small>Selected KvK</small><strong id="selectedId">—</strong></article><article><small>Story</small><strong id="selectedStory">—</strong></article><article><small>Start</small><strong id="selectedStart">—</strong></article><article><small>End</small><strong id="selectedEnd">—</strong></article><article><small>Status</small><strong id="selectedStatus">—</strong></article><article><small>Reserved next ID (not created)</small><strong id="nextId">—</strong></article></div><p id="count"></p></div></div></article>
+<div class="native-kvk-data"><p id="status" role="status">Checking Leadership authorization…</p><div hidden="" id="content"><label for="kvkSelect">SELECT KVK</label> <select id="kvkSelect"></select></div></div></article>
 <article class="admin-module-card">
 <h4>Kingdom Scan</h4>
 <p>Select a Kingdom scan and validate it locally before any future import into BattleTrack.</p>
@@ -49,15 +49,47 @@ body{background:#0d101b;color:#eee;font-family:system-ui,sans-serif}
 </article>
 <article class="admin-module-card">
 <h4>Comparison &amp; Export</h4>
-<p>Select any tracked KvK as the source for Leadership comparison and future exports.</p>
-<button disabled="" title="Disabled in read-only integration review" type="button">SELECT KVK</button>
+<p>Load the selected KvK comparison and export its Governor data as CSV.</p>
 <small>Historical: START → END · Active: START → LATEST</small><p class="native-selection-context" id="comparisonContext" aria-live="polite">Comparison source: loading…</p>
+<div class="comparison-actions"><button id="loadComparison" type="button" disabled>LOAD COMPARISON</button><button id="exportComparison" type="button" disabled>EXPORT CSV</button></div>
+<p class="comparison-state" id="comparisonState" role="status">Choose a KvK to load its comparison.</p>
+<div id="comparisonResults" hidden><p class="comparison-state" id="comparisonSummary"></p><div class="comparison-table-wrap"><table class="comparison-table"><thead><tr><th>Rank</th><th>Governor</th><th>ID</th><th>Start Power</th><th>KP</th><th>T4</th><th>T5</th><th>Deads</th><th>DKP</th><th>KPR</th><th>Requirement</th></tr></thead><tbody id="comparisonRows"></tbody></table></div></div>
 </article>
 </div>
 </section></main><script>
 'use strict';
 (async()=>{
  const status=document.getElementById('status'), content=document.getElementById('content');
+ const byId=id=>document.getElementById(id);
+ const headers=['Rank','Governor','ID','Start Power','KP','T4','T5','Deads','DKP','KPR','Requirement'];
+ const fields=['dkpRank','governorName','governorId','startPower','killPoints','t4Kills','t5Kills','deads','dkp','kpr','requirementStatus'];
+ const fmt=v=>typeof v==='number'&&Number.isInteger(v)?v.toLocaleString('en-US'):String(v??'—');
+ const percent=v=>v===null||v===undefined?'—':(Number(v)*100).toFixed(2)+'%';
+ let currentComparison=null;
+ const csvCell=v=>'"'+String(v??'').replace(/"/g,'""')+'"';
+ function resetComparison(){currentComparison=null;byId('comparisonResults').hidden=true;byId('comparisonRows').replaceChildren();byId('exportComparison').disabled=true;byId('comparisonState').textContent='Ready to load comparison for '+byId('kvkSelect').value+'.';}
+ byId('loadComparison').addEventListener('click',async()=>{
+  const id=byId('kvkSelect').value;if(!id)return;
+  resetComparison();byId('loadComparison').disabled=true;byId('comparisonState').textContent='Loading signed comparison for '+id+'…';
+  try{
+   const response=await fetch('/api/v1/leadership/comparisons/'+encodeURIComponent(id),{credentials:'same-origin',cache:'no-store'});
+   const payload=await response.json();if(!response.ok||!payload.ok||!payload.data?.ok)throw Error(payload.message||payload.data?.message||'HTTP '+response.status);
+   const data=payload.data;
+   if(data.kvk?.id!==id||!Array.isArray(data.rows)||data.total!==data.rows.length)throw Error('Comparison response validation failed.');
+   const body=byId('comparisonRows');const fragment=document.createDocumentFragment();
+   for(const row of data.rows){const tr=document.createElement('tr');for(const key of fields){const td=document.createElement('td');td.textContent=key==='kpr'?percent(row[key]):fmt(row[key]);tr.append(td)}fragment.append(tr)}body.append(fragment);
+   currentComparison=data;byId('comparisonSummary').textContent=data.total+' Governors · '+data.kvk.comparisonMode+' · '+data.kvk.startDate+' → '+(data.kvk.endDate||'LATEST');
+   byId('comparisonResults').hidden=false;byId('exportComparison').disabled=false;byId('comparisonState').textContent='Comparison loaded read-only. CSV export available.';
+  }catch(error){byId('comparisonState').textContent='Comparison unavailable: '+error.message}
+  finally{byId('loadComparison').disabled=false}
+ });
+ byId('exportComparison').addEventListener('click',()=>{
+  if(!currentComparison||currentComparison.kvk.id!==byId('kvkSelect').value)return;
+  const lines=[headers.map(csvCell).join(',')];
+  for(const row of currentComparison.rows)lines.push(fields.map(key=>csvCell(key==='kpr'?percent(row[key]):row[key])).join(','));
+  const blob=new Blob(['\uFEFF'+lines.join('\r\n')],{type:'text/csv;charset=utf-8'});
+  const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='BattleTrack-Comparison-'+currentComparison.kvk.id+'.csv';document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+ });
  try{
   const response=await fetch('/api/v1/leadership/kvks',{credentials:'same-origin',cache:'no-store'});
   if(!response.ok)throw Error('Leadership authorization failed (HTTP '+response.status+').');
@@ -66,8 +98,8 @@ body{background:#0d101b;color:#eee;font-family:system-ui,sans-serif}
   const data=result.data, list=data.kvks, select=document.getElementById('kvkSelect');
   const set=(id,value)=>document.getElementById(id).textContent=value??'—';
   for(const kvk of list){const option=document.createElement('option');option.value=kvk.id;option.textContent='KvK '+kvk.number+' · '+kvk.seasonName;select.append(option)}
-  function render(){const kvk=list.find(x=>x.id===select.value);if(!kvk)return;set('selectedId',kvk.id);set('selectedStory',kvk.seasonName);set('selectedStart',kvk.startDate);set('selectedEnd',kvk.endDate);set('selectedStatus',kvk.status);set('overviewContext','Selected KvK: '+kvk.id+' · '+kvk.seasonName+' (read-only context; overview action disabled)');set('comparisonContext','Comparison source: '+kvk.id+' · '+(kvk.status==='Historical'?'START → END':'START → LATEST')+' (export action disabled)')}
-  select.addEventListener('change',render);set('nextId',data.nextKvkId);set('count',list.length+' tracked KvKs · '+(data.stories?.length??0)+' story variants · no changes saved');render();content.hidden=false;status.textContent='Signed KvK data loaded successfully. Read-only.';
+  function render(){const kvk=list.find(x=>x.id===select.value);if(!kvk)return;set('overviewContext','Selected KvK: '+kvk.id+' · '+kvk.seasonName+' (read-only context; overview action disabled)');set('comparisonContext','Comparison source: '+kvk.id+' · '+(kvk.status==='Historical'?'START → END':'START → LATEST'));resetComparison()}
+  select.addEventListener('change',render);render();byId('loadComparison').disabled=false;content.hidden=false;status.textContent='Signed KvK data loaded successfully. Read-only.';
  }catch(error){status.textContent=error.message+' No KvK data displayed.';document.getElementById('overviewContext').textContent='No authorized KvK context available.';document.getElementById('comparisonContext').textContent='No authorized KvK context available.'}
 })();
 </script></body></html>
