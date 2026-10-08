@@ -54,6 +54,26 @@ async function fetchAppsScriptJson(env, params) {
   return payload;
 }
 
+// CF-014.1: signed, read-only Apps Script bridge. No admin token in browser.
+async function leadershipManagement(env) {
+  const secret = String(env.BT_BRIDGE_SECRET || "");
+  if (secret.length < 32) throw new Error("Bridge secret missing or too short");
+  const base = getAppsScriptApiUrl(env);
+  if (!base) throw new Error("Apps Script URL missing");
+  const timestamp = String(Math.floor(Date.now() / 1000));
+  const nonce = crypto.randomUUID();
+  const action = "kvkManagement";
+  const message = `${timestamp}\n${nonce}\n${action}`;
+  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const signature = Array.from(new Uint8Array(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(message)))).map(x => x.toString(16).padStart(2,"0")).join("");
+  const target = new URL(base);
+  for (const [k,v] of Object.entries({ bridge: "1", action, timestamp, nonce, signature })) target.searchParams.set(k,v);
+  const response = await fetch(target.toString(), { method: "GET", headers: { accept: "application/json" }, redirect: "follow" });
+  const payload = await response.json();
+  if (!response.ok || !payload?.ok) throw new Error("Bridge upstream rejected request");
+  return payload;
+}
+
 async function rankingMeta(request, env) {
   const cache = caches.default;
   const cacheKey = new Request(new URL("/__cache/api/v1/rankings/meta", request.url), { method: "GET" });
@@ -117,8 +137,8 @@ export default {
         if (!auth.ok) return apiError(auth.status === 401 ? 401 : 403, "LEADERSHIP_ACCESS_DENIED", "Valid Discord Officer and Data roles are required.");
         // Pilot uses already-public season catalog. True admin-only KvK data
         // must be migrated separately with an authenticated upstream bridge.
-        const source = await fetchAppsScriptJson(env, { action: "rankingMeta" });
-        return json({ ok: true, access: "leadership", source: "public_ranking_metadata", data: source });
+        const source = await leadershipManagement(env);
+        return json({ ok: true, access: "leadership", source: "signed_kvk_management", data: source });
       } catch (error) {
         console.error("Leadership pilot failed", error);
         return apiError(503, "LEADERSHIP_SOURCE_UNAVAILABLE", "Leadership read source temporarily unavailable.");

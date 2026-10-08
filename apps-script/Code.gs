@@ -53,6 +53,9 @@ function doGet(e) {
       e.parameter.governorId
     );
 
+  if (e && e.parameter && e.parameter.bridge === '1') {
+    return btBridgeGet_(e);
+  }
   if (isApiRequest) {
     return apiGet_(e);
   }
