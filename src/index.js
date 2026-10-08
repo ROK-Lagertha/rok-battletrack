@@ -88,6 +88,16 @@ async function rankingSeason(request, env, kvkId) {
 }
 
 
+// CF-010: public, read-only Governor lookup. No shared caching of player profiles.
+async function playerLookup(env, governorId) {
+  if (!/^\d{1,20}$/.test(governorId)) {
+    return apiError(400, "INVALID_ID", "Please enter a valid numeric Governor ID.");
+  }
+  const payload = await fetchAppsScriptJson(env, { action: "playerLookup", governorId });
+  return json(payload);
+}
+
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -102,6 +112,11 @@ export default {
     }
 
     try {
+      const playerMatch = url.pathname.match(/^\/api\/v1\/players\/([^/]+)$/);
+      if (request.method === "GET" && playerMatch) {
+        return await playerLookup(env, decodeURIComponent(playerMatch[1]));
+      }
+
       if (request.method === "GET" && url.pathname === "/api/v1/rankings/meta") {
         return await rankingMeta(request, env);
       }

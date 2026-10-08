@@ -624,6 +624,12 @@ function apiGet_(e) {
     const params = e && e.parameter ? e.parameter : {};
     const action = String(params.action || '').trim();
 
+    // CF-010: public Governor lookup through the existing read-only backend.
+    if (action === 'playerLookup') {
+      const governorId = String(params.governorId || '').trim();
+      return jsonResponse_(getPlayerData_(governorId));
+    }
+
     // CF-009: read-only Cloudflare bridge for public Kingdom Rankings.
     // No write/admin operation is exposed through this bridge.
     if (action === 'rankingMeta') {

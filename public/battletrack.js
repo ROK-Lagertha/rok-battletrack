@@ -12,6 +12,7 @@ const btApi={
     }
     return data;
   },
+  playerLookup(governorId){ return this.get('/players/'+encodeURIComponent(governorId)); },
   rankingMeta(){ return this.get('/rankings/meta'); },
   rankingSeason(kvkId){ return this.get('/rankings/'+encodeURIComponent(kvkId)); }
 };
@@ -260,21 +261,20 @@ function searchGovernor(){
   btn.textContent='SEARCHING\u2026';
   showMessage('Searching BattleTrack\u2026');
 
-  google.script.run
-    .withSuccessHandler(data=>{
+  btApi.playerLookup(id)
+    .then(data=>{
       btn.disabled=false; btn.textContent='SEARCH';
       if(!data || !data.success){
-        showMessage(data?.error?.message || 'Governor could not be loaded.', true);
+        showMessage(data?.error?.message || data?.message || 'Governor could not be loaded.', true);
         return;
       }
       showMessage('');
       renderDashboard(data);
     })
-    .withFailureHandler(err=>{
+    .catch(err=>{
       btn.disabled=false; btn.textContent='SEARCH';
       showMessage(err?.message || 'BattleTrack request failed.', true);
-    })
-    .getPlayerData(id);
+    });
 }
 
 $('governorId').addEventListener('keydown', e=>{
