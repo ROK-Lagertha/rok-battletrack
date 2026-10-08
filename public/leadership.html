@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"/><meta content="width=device-width,initial-scale=1" name="viewport"/><title>BattleTrack | Leadership Command Center</title><link href="/battletrack.css" rel="stylesheet"/><style>
+body{background:#0d101b;color:#eee;font-family:system-ui,sans-serif}
+.page-shell{max-width:1250px;margin:auto;padding:30px 18px}
+.admin-command-panel{display:block}
+.admin-module-card .native-kvk-data{margin-top:16px;padding-top:15px;border-top:1px solid rgba(195,153,58,.28)}
+.native-kvk-data select{width:100%;max-width:100%;background:#101b27;color:#f5f1e8;padding:10px;border:1px solid #9b7a38;border-radius:8px;margin:7px 0 12px;font:inherit}
+.native-kvk-data label{font-size:12px;letter-spacing:.07em;color:#d7b86a;font-weight:700}
+.native-kvk-data .native-kvk-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin:10px 0}
+.native-kvk-data .native-kvk-grid article{border:1px solid #33465a;border-radius:8px;padding:9px;overflow-wrap:anywhere;background:rgba(4,14,26,.3)}
+.native-kvk-data .native-kvk-grid small{display:block;font-size:11px;color:#b8c7d6;margin-bottom:4px}
+.native-kvk-data .native-kvk-grid strong{font-size:12px;color:#f1eee7}
+.native-kvk-data #status,.native-kvk-data #count{font-size:12px;line-height:1.5;color:#b8c7d6;margin:8px 0}
+.native-kvk-data .next-kvk{border-top:1px solid #33465a;margin-top:9px;padding-top:9px;font-size:12px}
+.native-kvk-data .next-kvk strong{color:#e4bf69}
+.admin-module-card button:disabled{opacity:.45;cursor:not-allowed}
+.comparison-actions{display:flex;flex-wrap:wrap;gap:10px;margin:14px 0}.comparison-actions button{display:inline-flex!important;align-items:center;justify-content:center;width:auto!important;min-width:150px;flex:0 1 auto;padding:10px 16px!important;font-size:12px!important;line-height:1.3!important;min-height:38px!important;margin:0!important}.comparison-actions button:not(:disabled){cursor:pointer}.comparison-table-wrap{max-height:560px;overflow:auto;margin-top:12px;max-width:100%;border:1px solid #33465a;border-radius:8px}.comparison-table{border-collapse:collapse;width:100%;font-size:12px}.comparison-table th,.comparison-table td{padding:8px 10px;border-bottom:1px solid #33465a;text-align:left;white-space:nowrap}.comparison-table th{color:#d7b86a;position:sticky;top:0;background:#101b27}.comparison-state{font-size:12px;color:#b8c7d6;line-height:1.6}.native-selection-context{font-size:12px;color:#d7b86a;margin-top:12px;line-height:1.5}
+.comparison-detail-panel{display:block;margin-top:16px;min-width:0}.comparison-detail-panel[hidden]{display:none!important}.comparison-detail-panel h4{margin:0 0 6px}.comparison-detail-panel .comparison-table{min-width:1060px}.comparison-detail-panel .comparison-table-wrap{scrollbar-gutter:stable}.admin-module-card{min-width:0}.comparison-actions button:disabled{opacity:.5}@media(max-width:650px){.comparison-actions button{min-width:0;flex:1 1 140px}.page-shell{padding:12px 8px}.native-kvk-data .native-kvk-grid{grid-template-columns:1fr}}
+.admin-module-card{align-self:start}.admin-module-card .native-kvk-data{margin-top:10px;padding-top:10px}.native-kvk-data select{margin-bottom:0}.comparison-detail-panel{grid-column:1/-1}#comparisonResults[hidden]{display:none!important}</style></head><body><main class="page-shell"><section class="panel admin-command-panel" id="adminPanel">
+<div class="admin-command-head">
+<div>
+<div class="kicker">KINGDOM 3903 · LEADERSHIP</div>
+<h3>Leadership Command Center</h3>
+<p>Internal BattleTrack workspace for Kingdom scans, current KvK monitoring and Leadership exports.</p>
+</div>
+<div class="admin-head-actions">
+<span class="admin-session-label" id="adminSessionLabel">SECURE SESSION</span>
+<button type="button" id="btDiscordLogout" class="admin-logout-btn">LOGOUT</button>
+</div>
+</div>
+<div class="admin-module-grid">
+<article class="admin-module-card">
+<h4>KvK Management</h4>
+<p>Select the KvK for Leadership. Creating or closing KvKs remains disabled.</p>
+<div class="admin-module-actions"><button disabled="" title="Disabled in read-only integration review" type="button">ADD NEW KVK</button><button disabled="" title="Disabled in read-only integration review" type="button">CLOSE KVK</button></div>
+<small>Create or safely close a tracked KvK</small>
+<p id="status" role="status" hidden>Checking Leadership authorization…</p></article>
+<article class="admin-module-card">
+<h4>Kingdom Scan</h4>
+<p>Select a Kingdom scan and validate it locally before any future import into BattleTrack.</p>
+<button id="openScanPreview" type="button">UPLOAD KINGDOM SCAN</button>
+<small>Preview only · no database or Drive changes</small>
+</article>
+<article class="admin-module-card">
+<h4>Current KvK Overview</h4>
+<p>Leadership view for Governor performance, Requirements and current progress.</p>
+<button id="openKvkOverview" type="button" disabled>OPEN KVK OVERVIEW</button>
+<small>Available when scan data exists for the selected KvK</small><p class="native-selection-context" id="overviewContext" aria-live="polite">Selected KvK: loading…</p>
+</article>
+<article class="admin-module-card">
+<h4>Comparison &amp; Export</h4>
+<p>Load the selected KvK comparison and export its Governor data as CSV.</p>
+<div class="native-kvk-data"><div hidden="" id="content"><label for="kvkSelect">SELECT KVK</label> <select id="kvkSelect"></select></div></div>
+<small>Historical: START → END · Active: START → LATEST</small><p class="native-selection-context" id="comparisonContext" aria-live="polite">Comparison source: loading…</p>
+<div class="comparison-actions"><button id="loadComparison" type="button" disabled>LOAD COMPARISON</button><button id="exportComparison" type="button" disabled>EXPORT CSV</button></div>
+<p class="comparison-state" id="comparisonState" role="status">Choose a KvK to load its comparison.</p>
+
+</article>
+</div>
+<section id="comparisonResults" class="admin-module-card comparison-detail-panel" hidden aria-label="Leadership comparison results">
+<h4>Governor Comparison</h4>
+<p class="comparison-state" id="comparisonSummary"></p>
+<div class="comparison-table-wrap" role="region" aria-label="Scrollable Governor comparison table" tabindex="0"><table class="comparison-table"><thead><tr><th>Rank</th><th>Governor</th><th>ID</th><th>Start Power</th><th>KP</th><th>T4</th><th>T5</th><th>Deads</th><th>DKP</th><th>KPR</th><th>Requirement</th></tr></thead><tbody id="comparisonRows"></tbody></table></div>
+</section>
+</section></main><script>
+'use strict';
+document.getElementById('btDiscordLogout').addEventListener('click', async () => {
+  try { await fetch('/api/auth/discord/logout', { method:'GET', credentials:'same-origin', cache:'no-store' }); }
+  finally { location.replace('/api/auth/discord/login'); }
+});
+(async()=>{
+ const status=document.getElementById('status'), content=document.getElementById('content');
+ const byId=id=>document.getElementById(id);
+ const headers=['Rank','Governor','ID','Start Power','KP','T4','T5','Deads','DKP','KPR','Requirement'];
+ const fields=['dkpRank','governorName','governorId','startPower','killPoints','t4Kills','t5Kills','deads','dkp','kpr','requirementStatus'];
+ const fmt=v=>typeof v==='number'&&Number.isInteger(v)?v.toLocaleString('en-US'):String(v??'—');
+ const percent=v=>v===null||v===undefined?'—':(Number(v)*100).toFixed(2)+'%';
+ let currentComparison=null;
+ const csvCell=v=>'"'+String(v??'').replace(/"/g,'""')+'"';
+ function resetComparison(){currentComparison=null;byId('comparisonResults').hidden=true;byId('comparisonRows').replaceChildren();byId('exportComparison').disabled=true;byId('comparisonState').textContent='Ready to load comparison for '+byId('kvkSelect').value+'.';}
+ byId('loadComparison').addEventListener('click',async()=>{
+  const id=byId('kvkSelect').value;if(!id)return;
+  resetComparison();byId('loadComparison').disabled=true;byId('comparisonState').textContent='Loading signed comparison for '+id+'…';
+  try{
+   const response=await fetch('/api/v1/leadership/comparisons/'+encodeURIComponent(id),{credentials:'same-origin',cache:'no-store'});
+   const payload=await response.json();if(!response.ok||!payload.ok||!payload.data?.ok)throw Error(payload.message||payload.data?.message||'HTTP '+response.status);
+   const data=payload.data;
+   if(data.kvk?.id!==id||!Array.isArray(data.rows)||data.total!==data.rows.length)throw Error('Comparison response validation failed.');
+   const body=byId('comparisonRows');const fragment=document.createDocumentFragment();
+   for(const row of data.rows){const tr=document.createElement('tr');for(const key of fields){const td=document.createElement('td');td.textContent=key==='kpr'?percent(row[key]):fmt(row[key]);tr.append(td)}fragment.append(tr)}body.append(fragment);
+   currentComparison=data;byId('comparisonSummary').textContent=data.total+' Governors · '+data.kvk.comparisonMode+' · '+data.kvk.startDate+' → '+(data.kvk.endDate||'LATEST');
+   byId('comparisonResults').hidden=false;byId('exportComparison').disabled=false;byId('comparisonState').textContent='Comparison loaded read-only. CSV export available.';
+  }catch(error){byId('comparisonState').textContent='Comparison unavailable: '+error.message}
+  finally{byId('loadComparison').disabled=false}
+ });
+ byId('exportComparison').addEventListener('click',()=>{
+  if(!currentComparison||currentComparison.kvk.id!==byId('kvkSelect').value)return;
+  const lines=[headers.map(csvCell).join(',')];
+  for(const row of currentComparison.rows)lines.push(fields.map(key=>csvCell(key==='kpr'?percent(row[key]):row[key])).join(','));
+  const blob=new Blob(['\uFEFF'+lines.join('\r\n')],{type:'text/csv;charset=utf-8'});
+  const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='BattleTrack-Comparison-'+currentComparison.kvk.id+'.csv';document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+ });
+ try{
+  const response=await fetch('/api/v1/leadership/kvks',{credentials:'same-origin',cache:'no-store'});
+  if(!response.ok)throw Error('Leadership authorization failed (HTTP '+response.status+').');
+  const result=await response.json();
+  if(!result.ok||!result.data?.ok||!Array.isArray(result.data.kvks))throw Error('Unexpected bridge response.');
+  const data=result.data, list=data.kvks, select=document.getElementById('kvkSelect');
+  const set=(id,value)=>document.getElementById(id).textContent=value??'—';
+  for(const kvk of list){const option=document.createElement('option');option.value=kvk.id;option.textContent='KvK '+kvk.number+' · '+kvk.seasonName;select.append(option)}
+  function render(){const kvk=list.find(x=>x.id===select.value);if(!kvk)return;set('overviewContext','Selected KvK: '+kvk.id+' · '+kvk.seasonName+' (read-only)');set('comparisonContext','Comparison source: '+kvk.id+' · '+(kvk.status==='Historical'?'START → END':'START → LATEST'));resetComparison()}
+  select.addEventListener('change',render);render();byId('loadComparison').disabled=false;byId('openKvkOverview').disabled=false;content.hidden=false;status.textContent='';status.hidden=true;
+ }catch(error){status.hidden=false;status.textContent=error.message+' No KvK data displayed.';document.getElementById('overviewContext').textContent='No authorized KvK context available.';document.getElementById('comparisonContext').textContent='No authorized KvK context available.'}
+})();
+</script><style>
+/* CF-016: Scoped overview dialog. No changes to existing four-card layout. */
+#btOverviewDialog{border:1px solid #977337;border-radius:12px;background:#0c1925;color:#f2efe7;width:min(1240px,96vw);max-height:90vh;padding:20px;box-shadow:0 15px 65px #000b;font:14px system-ui,sans-serif}
+#btOverviewDialog::backdrop{background:#03080ed9}#btOverviewDialog *{box-sizing:border-box}
+#btOverviewDialog .ov-head{display:flex;justify-content:space-between;align-items:start;gap:16px;border-bottom:1px solid #435164;padding-bottom:12px}
+#btOverviewDialog h3{margin:0;color:#e8c174;font-size:23px}#btOverviewDialog .ov-meta{color:#aac3d8;font-size:12px;margin-top:5px}
+#btOverviewDialog button{width:auto;min-width:0;padding:9px 15px;cursor:pointer;border-radius:7px;border:1px solid #9d7b3d;background:#172637;color:#f2e9d5;font:inherit}
+#btOverviewDialog button:focus-visible,#btOverviewDialog input:focus-visible,#btOverviewDialog select:focus-visible{outline:2px solid #e8c174;outline-offset:2px}
+#btOverviewDialog .ov-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:16px 0}
+#btOverviewDialog .ov-stat{padding:12px;border:1px solid #304458;border-radius:8px}#btOverviewDialog .ov-stat span{display:block;color:#aac3d8;font-size:11px}#btOverviewDialog .ov-stat strong{display:block;font-size:21px;margin-top:4px}
+#btOverviewDialog .ov-filters{display:flex;gap:9px;flex-wrap:wrap;margin-bottom:12px}#btOverviewDialog input,#btOverviewDialog select{background:#101f2d;border:1px solid #50627a;border-radius:7px;color:#f2efe7;padding:10px;font:inherit;min-width:0}#btOverviewDialog input{flex:1 1 210px}#btOverviewDialog select{flex:1 1 170px}
+#btOverviewDialog .ov-scroll{max-height:50vh;overflow:auto;border:1px solid #33485b;border-radius:8px}#btOverviewDialog table{border-collapse:collapse;min-width:1260px;width:100%;font-size:12px}#btOverviewDialog th,#btOverviewDialog td{padding:10px;border-bottom:1px solid #304458;text-align:left;white-space:nowrap}#btOverviewDialog th{position:sticky;top:0;background:#152838;color:#e8c174;z-index:1}#btOverviewDialog td small{display:block;color:#a6b8c9}#btOverviewDialog .ov-progress{font-size:11px;color:#c9d8e6}#btOverviewDialog .ov-progress b{display:block}#btOverviewDialog .ov-bar{height:4px;background:#304154;border-radius:5px;margin-top:4px;width:130px;overflow:hidden}#btOverviewDialog .ov-bar i{display:block;height:100%;background:#d4a545}#btOverviewDialog .ov-message{color:#aac3d8;margin:12px 0}
+@media(max-width:650px){#btOverviewDialog{padding:12px}#btOverviewDialog .ov-stats{grid-template-columns:repeat(2,minmax(0,1fr))}#btOverviewDialog h3{font-size:18px}}
+</style>
+<dialog id="btOverviewDialog" aria-labelledby="btOverviewTitle">
+ <div class="ov-head"><div><h3 id="btOverviewTitle">Current KvK Overview</h3><div class="ov-meta" id="btOverviewMeta"></div></div><button type="button" id="btOverviewClose" aria-label="Close overview">CLOSE ✕</button></div>
+ <p class="ov-message" id="btOverviewMessage" role="status">Select a KvK to view its Governors.</p>
+ <div id="btOverviewContent" hidden>
+  <div class="ov-stats"><div class="ov-stat"><span>GOVERNORS</span><strong id="ovTotal">—</strong></div><div class="ov-stat"><span>REQUIREMENT MET</span><strong id="ovMet">—</strong></div><div class="ov-stat"><span id="ovProgressLabel">IN PROGRESS</span><strong id="ovProgress">—</strong></div><div class="ov-stat"><span>AVERAGE PROGRESS</span><strong id="ovAverage">—</strong></div></div>
+  <div class="ov-filters"><input id="ovSearch" type="search" placeholder="Search Governor or ID" aria-label="Search Governor or ID"/><select id="ovStatus" aria-label="Filter by status"><option value="ALL">ALL STATUS</option></select><select id="ovSort" aria-label="Sort Governors"><option value="overall-asc">Progress: lowest first</option><option value="overall-desc">Progress: highest first</option><option value="dkp-desc">DKP: highest first</option><option value="deads-desc">Deads: highest first</option><option value="kills-desc">Kills: highest first</option><option value="power-desc">Start Power: highest first</option></select></div>
+  <p class="ov-meta" id="ovShown" aria-live="polite"></p>
+  <div class="ov-scroll" tabindex="0" role="region" aria-label="Governor overview table"><table><thead><tr><th>Governor</th><th>Start Power</th><th>KP</th><th>Kills</th><th>Deads</th><th>DKP</th><th>KPR</th><th>Kills Requirement</th><th>Deads Requirement</th><th>Overall</th><th>Status</th></tr></thead><tbody id="ovRows"></tbody></table></div>
+ </div>
+</dialog>
+<script>
+(()=>{'use strict';
+ const $=id=>document.getElementById(id),dlg=$('btOverviewDialog');let current=null,requestNo=0;
+ const n=v=>{const x=Number(v);return Number.isFinite(x)?x:0},fmt=v=>v===null||v===undefined||v===''?'—':n(v).toLocaleString('en-US');
+ const pct=v=>v===null||v===undefined||v===''?'—':n(v).toFixed(0)+'%';
+ function group(r,historical){const s=String(r.requirementStatus||'').toUpperCase().replace(/\s+/g,'_');if(['PASS','MET','REQUIREMENT_MET'].includes(s))return 'MET';if(historical)return 'NOT_MET';if(['NOT_MET','FAIL','FAILED'].includes(s))return 'NOT_MET';return 'IN_PROGRESS'}
+ function render(){if(!current)return;const historical=current.kvk.comparisonMode==='START_END',q=$('ovSearch').value.trim().toLowerCase(),status=$('ovStatus').value,sort=$('ovSort').value;
+  const rows=current.rows.filter(r=>(!q||String(r.governorName||'').toLowerCase().includes(q)||String(r.governorId||'').toLowerCase().includes(q))&&(status==='ALL'||group(r,historical)===status));
+  rows.sort((a,b)=>sort==='overall-desc'?n(b.overallProgress)-n(a.overallProgress):sort==='dkp-desc'?n(b.dkp)-n(a.dkp):sort==='deads-desc'?n(b.deads)-n(a.deads):sort==='kills-desc'?n(b.kills)-n(a.kills):sort==='power-desc'?n(b.startPower)-n(a.startPower):n(a.overallProgress)-n(b.overallProgress));
+  const fragment=document.createDocumentFragment();for(const r of rows){const tr=document.createElement('tr');const g=group(r,historical);const label=g==='MET'?'MET':g==='NOT_MET'?'NOT MET':'IN PROGRESS';
+   const cells=[[r.governorName,r.governorId],fmt(r.startPower),fmt(r.killPoints),fmt(r.kills),fmt(r.deads),fmt(r.dkp),(n(r.kpr)*100).toFixed(2)+'%',null,null,pct(r.overallProgress),label];
+   cells.forEach((value,i)=>{const td=document.createElement('td');if(i===0){const strong=document.createElement('strong');strong.textContent=value[0]||'—';const small=document.createElement('small');small.textContent=value[1]||'';td.append(strong,small)}else if(i===7||i===8){const val=i===7?r.kills:r.deads,target=i===7?r.killRequirement:r.deadRequirement,progress=i===7?r.killProgress:r.deadProgress;const wrapper=document.createElement('div');wrapper.className='ov-progress';const text=document.createElement('span');text.textContent=fmt(val)+' / '+fmt(target);const bold=document.createElement('b');bold.textContent=pct(progress);const bar=document.createElement('div');bar.className='ov-bar';const fill=document.createElement('i');fill.style.width=Math.min(100,Math.max(0,n(progress)))+'%';bar.append(fill);wrapper.append(text,bold,bar);td.append(wrapper)}else td.textContent=value;tr.append(td)});fragment.append(tr)}$('ovRows').replaceChildren(fragment);$('ovShown').textContent=rows.length+' of '+current.rows.length+' Governors shown.';
+ }
+ function stats(data){const historical=data.kvk.comparisonMode==='START_END',rows=data.rows,met=rows.filter(r=>group(r,historical)==='MET').length,notMet=rows.filter(r=>group(r,historical)===(historical?'NOT_MET':'IN_PROGRESS')).length,vals=rows.map(r=>Number(r.overallProgress)).filter(Number.isFinite),avg=vals.length?vals.reduce((a,b)=>a+b,0)/vals.length:0;
+  $('btOverviewTitle').textContent='KvK '+data.kvk.number+' · '+(data.kvk.seasonName||data.kvk.id);$('btOverviewMeta').textContent=(data.kvk.status||'—')+' · '+(historical?'START → END':'START → LATEST')+' · '+(data.kvk.startDate||'—')+' → '+(historical?(data.kvk.endDate||'END'):'LATEST');$('ovTotal').textContent=fmt(rows.length);$('ovMet').textContent=fmt(met);$('ovProgressLabel').textContent=historical?'REQUIREMENT NOT MET':'IN PROGRESS';$('ovProgress').textContent=fmt(notMet);$('ovAverage').textContent=avg.toFixed(1)+'%';$('ovStatus').replaceChildren(...[['ALL','ALL STATUS'],['MET','REQUIREMENT MET'],[historical?'NOT_MET':'IN_PROGRESS',historical?'REQUIREMENT NOT MET':'IN PROGRESS']].map(([v,t])=>{const o=document.createElement('option');o.value=v;o.textContent=t;return o}));$('ovSearch').value='';$('ovSort').value='overall-asc';render();
+ }
+ $('openKvkOverview').addEventListener('click',async()=>{const id=$('kvkSelect').value;if(!id)return;const ticket=++requestNo;current=null;$('btOverviewContent').hidden=true;$('btOverviewMessage').textContent='Loading '+id+'…';dlg.showModal();try{const response=await fetch('/api/v1/leadership/comparisons/'+encodeURIComponent(id),{credentials:'same-origin',cache:'no-store'});const payload=await response.json();if(ticket!==requestNo||!dlg.open)return;if(!response.ok||!payload.ok||!payload.data?.ok)throw Error(payload.message||payload.data?.message||'HTTP '+response.status);const data=payload.data;if(data.kvk?.id!==id||!Array.isArray(data.rows)||data.total!==data.rows.length)throw Error('Overview response validation failed.');current=data;stats(data);$('btOverviewContent').hidden=false;$('btOverviewMessage').textContent='Read-only overview · '+data.total+' Governors.'}catch(error){if(ticket===requestNo&&dlg.open)$('btOverviewMessage').textContent='Overview unavailable: '+error.message}});
+ $('btOverviewClose').addEventListener('click',()=>dlg.close());dlg.addEventListener('close',()=>{requestNo++;current=null});['ovSearch','ovStatus','ovSort'].forEach(id=>$(id).addEventListener(id==='ovSearch'?'input':'change',render));
+})();
+</script>
+<style>
+#btScanDialog{border:1px solid #977337;border-radius:12px;background:#0c1925;color:#f2efe7;width:min(760px,95vw);max-height:90vh;overflow:auto;padding:22px;font:14px system-ui,sans-serif}
+#btScanDialog::backdrop{background:#03080ed9}#btScanDialog *{box-sizing:border-box}
+#btScanDialog h3{color:#eab85c;margin:0 0 8px}#btScanDialog p{color:#b5c8d8}#btScanDialog label{display:block;margin:15px 0 5px;color:#e9c46e;font-weight:600}
+#btScanDialog select,#btScanDialog input{width:100%;padding:11px;background:#102131;color:#fff;border:1px solid #596979;border-radius:7px}
+#btScanDialog .scan-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:20px}#btScanDialog button{width:auto!important;min-width:120px}
+#btScanDialog .scan-report{margin-top:18px;border:1px solid #33465a;padding:12px;border-radius:8px;white-space:pre-wrap;line-height:1.65}
+</style>
+<dialog id="btScanDialog" aria-label="Kingdom Scan local preview">
+<h3>Kingdom Scan · Local Preview</h3>
+<p>Choose an XLSX file and review its basic file metadata and target assignment. Governor rows are checked locally in your browser. Nothing is uploaded or imported.</p>
+<label for="btScanFile">Kingdom scan (.xlsx)</label><input id="btScanFile" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
+<label for="btScanKvk">Target KvK (read-only assignment)</label><select id="btScanKvk"></select>
+<label for="btScanSnapshot">Snapshot type</label><select id="btScanSnapshot"><option value="">Choose snapshot</option><option value="START">START</option><option value="MIDDLE">MIDDLE</option><option value="END">END</option></select>
+<div id="btScanReport" class="scan-report" role="status">No file selected. Nothing has been uploaded or saved.</div>
+<div id="btScanValidation" class="scan-report" hidden aria-live="polite"></div>
+<div class="scan-actions"><button type="button" id="btScanClose">CLOSE</button></div>
+</dialog>
+<script>
+(()=>{'use strict';
+const dlg=document.getElementById('btScanDialog'),file=document.getElementById('btScanFile'),kvk=document.getElementById('btScanKvk'),snap=document.getElementById('btScanSnapshot'),report=document.getElementById('btScanReport');
+
+const validation=document.getElementById('btScanValidation');
+let run=0;
+const xml=text=>{const d=new DOMParser().parseFromString(text,'application/xml');if(d.querySelector('parsererror'))throw Error('Invalid workbook XML');return d};
+const children=(node,name)=>Array.from(node?.children||[]).filter(n=>n.localName===name);
+const first=(node,name)=>children(node,name)[0];
+async function unpack(buffer){
+const view=new DataView(buffer),bytes=new Uint8Array(buffer),entries=new Map();
+let end=-1;for(let p=bytes.length-22;p>=Math.max(0,bytes.length-65557);p--){if(view.getUint32(p,true)===0x06054b50){end=p;break}}
+if(end<0)throw Error('Not a valid XLSX ZIP archive');
+let pos=view.getUint32(end+16,true),count=view.getUint16(end+10,true);
+if(count>3000)throw Error('Workbook contains too many ZIP entries');
+for(let i=0;i<count;i++){
+if(view.getUint32(pos,true)!==0x02014b50)throw Error('Invalid ZIP directory');
+const method=view.getUint16(pos+10,true),packed=view.getUint32(pos+20,true),nameLen=view.getUint16(pos+28,true),extra=view.getUint16(pos+30,true),comment=view.getUint16(pos+32,true),offset=view.getUint32(pos+42,true);
+const name=new TextDecoder().decode(bytes.slice(pos+46,pos+46+nameLen));pos+=46+nameLen+extra+comment;
+if(!/^(xl\/(workbook\.xml|_rels\/workbook\.xml\.rels|sharedStrings\.xml|worksheets\/[^/]+\.xml))$/.test(name))continue;
+if(view.getUint32(offset,true)!==0x04034b50)throw Error('Invalid ZIP entry');
+const dataStart=offset+30+view.getUint16(offset+26,true)+view.getUint16(offset+28,true);
+if(packed>25*1024*1024)throw Error('Compressed entry too large');
+let content=bytes.slice(dataStart,dataStart+packed);
+if(method===8){
+if(typeof DecompressionStream==='undefined')throw Error('Browser does not support XLSX decompression');
+const stream=new Blob([content]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+content=new Uint8Array(await new Response(stream).arrayBuffer());
+}else if(method!==0)throw Error('Unsupported ZIP compression');
+if(content.byteLength>45*1024*1024)throw Error('Worksheet too large');
+entries.set(name,new TextDecoder().decode(content));
+}
+return entries;
+}
+function cellText(cell,strings){
+const kind=cell.getAttribute('t'),v=first(cell,'v');
+if(kind==='inlineStr')return Array.from(cell.getElementsByTagName('*')).filter(n=>n.localName==='t').map(n=>n.textContent).join('');
+const raw=v?.textContent||'';
+if(kind==='s')return strings[Number(raw)]??'';
+return raw;
+}
+function parseSheet(source,strings){
+const doc=xml(source),rows=[];
+for(const row of Array.from(doc.getElementsByTagName('*')).filter(n=>n.localName==='row')){
+const values={};
+for(const c of children(row,'c')){
+const col=(c.getAttribute('r')||'').match(/^[A-Z]+/i)?.[0]||'A';
+let idx=0;for(const ch of col.toUpperCase())idx=idx*26+ch.charCodeAt(0)-64;
+values[idx-1]=cellText(c,strings);
+}
+rows.push(values);if(rows.length>150000)throw Error('Too many worksheet rows');
+}
+return rows;
+}
+function validate(rows){
+const required=['Kingdom','Governor Name','Governor ID','Power','Deads','Kill Points','T1 Kills','T2 Kills','T3 Kills','T4 Kills','T5 Kills'];
+const normalize=s=>String(s??'').trim().toLowerCase().replace(/\s+/g,' ');
+let header=-1,columns={};
+for(let i=0;i<Math.min(35,rows.length);i++){
+ const found={};for(const [index,value] of Object.entries(rows[i]))found[normalize(value)]=Number(index);
+ if(required.every(name=>found[normalize(name)]!==undefined)){
+  header=i;columns=Object.fromEntries(required.map(name=>[name,found[normalize(name)]]));break;
+ }
+}
+if(header<0)return {ok:false,message:'Required columns missing on worksheet 3903: '+required.join(', '),total:rows.length};
+const seen=new Set(),duplicates=[],invalid=[],samples=[];let count=0,duplicateCount=0,invalidCount=0;
+const numeric=['Power','Deads','Kill Points','T1 Kills','T2 Kills','T3 Kills','T4 Kills','T5 Kills'];
+for(let i=header+1;i<rows.length;i++){
+ const r=rows[i],id=String(r[columns['Governor ID']]??'').trim(),name=String(r[columns['Governor Name']]??'').trim();
+ if(!id&&!name)continue;count++;
+ let problem='';
+ if(!/^\d{6,15}$/.test(id))problem='Invalid Governor ID';
+ else if(!name)problem='Missing Governor Name';
+ else if(String(r[columns['Kingdom']]??'').trim()!=='3903')problem='Kingdom is not 3903';
+ else for(const field of numeric){const value=String(r[columns[field]]??'').trim();if(!/^\d+$/.test(value)||!Number.isSafeInteger(Number(value))){problem='Invalid '+field;break}}
+ if(problem){invalidCount++;if(invalid.length<8)invalid.push('Row '+(i+1)+': '+problem+' ('+(id||'empty')+')');}
+ if(/^\d{6,15}$/.test(id)){if(seen.has(id)){duplicateCount++;if(duplicates.length<8)duplicates.push('Row '+(i+1)+': '+id)}else seen.add(id)}
+ if(samples.length<5)samples.push(id+(name?' · '+name:''));
+}
+return {ok:invalidCount===0&&duplicateCount===0,count,unique:seen.size,invalid,duplicates,invalidCount,duplicateCount,samples,header:header+1,columns:required.length};
+}
+async function display(){
+const ticket=++run,f=file.files?.[0],target=kvk.value,kind=snap.value;
+validation.hidden=true;validation.textContent='';
+if(!f){report.textContent='No file selected. Nothing has been uploaded or saved.';return}
+const ext=/\.xlsx$/i.test(f.name),size=f.size<=25*1024*1024&&f.size>0;
+report.textContent='File: '+f.name+'\nSize: '+f.size.toLocaleString()+' bytes\nTarget KvK: '+(target||'Not selected')+'\nSnapshot: '+(kind||'Not selected')+'\nExtension: '+(ext?'OK':'INVALID')+'\nSize limit (25 MB): '+(size?'OK':'INVALID')+'\n\nLOCAL PREVIEW ONLY · No upload, import, archive or database write.';
+if(!ext||!size||!target||!kind)return;
+validation.hidden=false;validation.textContent='Reading XLSX locally…';
+try{
+const entries=await unpack(await f.arrayBuffer());if(ticket!==run)return;
+let strings=[];
+if(entries.has('xl/sharedStrings.xml')){
+const d=xml(entries.get('xl/sharedStrings.xml'));
+strings=Array.from(d.getElementsByTagName('*')).filter(n=>n.localName==='si').map(si=>Array.from(si.getElementsByTagName('*')).filter(n=>n.localName==='t').map(t=>t.textContent).join(''));
+}
+const workbook=xml(entries.get('xl/workbook.xml')||'');
+const sheets=Array.from(workbook.getElementsByTagName('*')).filter(n=>n.localName==='sheet');
+const rels=xml(entries.get('xl/_rels/workbook.xml.rels')||'');
+const relations=new Map(Array.from(rels.getElementsByTagName('*')).filter(n=>n.localName==='Relationship').map(r=>[r.getAttribute('Id'),r.getAttribute('Target')]));
+const s=sheets.find(item=>item.getAttribute('name')==='3903');
+if(!s)throw Error('Required worksheet "3903" is missing. Other sheets are never used.');
+const rel=s.getAttribute('r:id')||Array.from(s.attributes).find(a=>a.localName==='id')?.value;
+let path=relations.get(rel)||'';
+path=path.startsWith('/')?path.slice(1):path.startsWith('xl/')?path:'xl/'+path;
+const parts=[];for(const p of path.split('/')){if(p==='..')parts.pop();else if(p!=='.')parts.push(p)}path=parts.join('/');
+if(!entries.has(path))throw Error('Worksheet "3903" could not be read. No other worksheet will be used.');
+const v=validate(parseSheet(entries.get(path),strings));
+if(ticket!==run)return;
+validation.textContent='LOCAL XLSX CONTENT CHECK\nWorksheet: 3903 (required)\n'+(v.header?'Header row: '+v.header+'\nRequired columns: '+v.columns+'\nGovernor rows: '+v.count+'\nUnique IDs: '+v.unique+'\nDuplicate IDs: '+v.duplicateCount+' (samples: '+(v.duplicates.join('; ')||'None')+')\nInvalid rows: '+v.invalidCount+' (samples: '+(v.invalid.join('; ')||'None')+')\nSample governors: '+(v.samples.join('; ')||'None')+'\n':'')+
+(v.ok?'Required columns, IDs and numeric fields passed basic checks.':'REVIEW REQUIRED: '+(v.message||'Invalid or duplicate Governor data.'))+
+'\n\nLOCAL PREVIEW ONLY. Not import approval. Closed KvK write locks are not implemented yet. No data saved.';
+}catch(e){if(ticket===run)validation.textContent='Unable to inspect XLSX: '+e.message+'\nNo data uploaded or saved.'}
+}
+
+document.getElementById('openScanPreview').addEventListener('click',()=>{
+const source=document.getElementById('kvkSelect');kvk.replaceChildren();for(const opt of source.options){const o=document.createElement('option');o.value=opt.value;o.textContent=opt.textContent;kvk.append(o)}kvk.value=source.value;display();dlg.showModal();});
+document.getElementById('btScanClose').addEventListener('click',()=>dlg.close());
+for(const e of [file,kvk,snap])e.addEventListener('change',display);
+})();
+</script>
+</body></html>

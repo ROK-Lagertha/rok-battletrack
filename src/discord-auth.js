@@ -41,7 +41,7 @@ export async function discordAuth(request,env,path){
     if(!member?.allowed)return new Response(errorPage('Access denied. Membership and BOTH Officer + Data roles are required.').body,{status:403,headers:{'content-type':'text/html; charset=utf-8','cache-control':'no-store','set-cookie':clear(STATE)}});
     const expires=Math.min(Date.now()+60*60*1000,Date.now()+Math.max(0,(tokens.expires_in||3600)-60)*1000);
     const session=await seal(env,{token:tokens.access_token,userId:member.user.id,exp:expires});
-    const headers=new Headers({location:'/?discord_auth=success','cache-control':'no-store'});
+    const headers=new Headers({location:'/leadership','cache-control':'no-store'});
     headers.append('set-cookie',cookie(COOKIE,session,3600));headers.append('set-cookie',clear(STATE));
     return new Response(null,{status:302,headers});
   }

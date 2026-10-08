@@ -127,6 +127,29 @@ export default {
       catch (error) { console.error("Discord OAuth error", error); return apiError(503, "AUTH_UNAVAILABLE", "Discord login temporarily unavailable."); }
     }
 
+    // CF-CUTOVER-01: leadership landing, server-side Discord Officer + Data gate.
+    // The public landing page is intentionally not a second login screen.
+    if (url.pathname === "/leadership" || url.pathname === "/leadership/") {
+      if (request.method !== "GET" && request.method !== "HEAD") return apiError(405, "METHOD_NOT_ALLOWED", "GET or HEAD required.");
+      try {
+        const check = await discordAuth(request, env, "/api/auth/discord/me");
+        if (!check.ok) {
+          return Response.redirect(new URL("/api/auth/discord/login", request.url), 302);
+        }
+        const assetUrl = new URL("/leadership.html", request.url);
+        const response = await env.ASSETS.fetch(new Request(assetUrl, request));
+        const headers = new Headers(response.headers);
+        headers.set("cache-control", "private, no-store");
+        headers.set("x-content-type-options", "nosniff");
+        return new Response(response.body, { status: response.status, headers });
+      } catch (error) {
+        console.error("Leadership page authentication failed", error);
+        return apiError(503, "LEADERSHIP_AUTH_UNAVAILABLE", "Discord authorization temporarily unavailable.");
+      }
+    }
+    // Deny direct asset access; use /leadership which checks roles first.
+    if (url.pathname === "/leadership.html") return apiError(403, "LEADERSHIP_ACCESS_REQUIRED", "Use /leadership.");
+
     // CF-012.1: read-only leadership gateway pilot. Authorization is checked
     // server-side on every request; no legacy Apps Script admin APIs are exposed.
     // CF-015.1: protected, uncached, read-only comparison of an existing KvK.
