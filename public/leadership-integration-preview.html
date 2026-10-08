@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en"><head><meta charset="utf-8"/><meta content="width=device-width,initial-scale=1" name="viewport"/><title>BattleTrack | Leadership Comparison CF-015.2.1</title><link href="/battletrack.css" rel="stylesheet"/><style>
+<html lang="en"><head><meta charset="utf-8"/><meta content="width=device-width,initial-scale=1" name="viewport"/><title>BattleTrack | Leadership Comparison CF-015.3</title><link href="/battletrack.css" rel="stylesheet"/><style>
 body{background:#0d101b;color:#eee;font-family:system-ui,sans-serif}
 .page-shell{max-width:1250px;margin:auto;padding:30px 18px}
 .admin-command-panel{display:block}
@@ -14,8 +14,8 @@ body{background:#0d101b;color:#eee;font-family:system-ui,sans-serif}
 .native-kvk-data .next-kvk{border-top:1px solid #33465a;margin-top:9px;padding-top:9px;font-size:12px}
 .native-kvk-data .next-kvk strong{color:#e4bf69}
 .admin-module-card button:disabled{opacity:.45;cursor:not-allowed}
-.comparison-actions{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}.comparison-actions button{padding:9px 12px}.comparison-actions button:not(:disabled){cursor:pointer}.comparison-table-wrap{max-height:450px;overflow:auto;margin-top:12px;border:1px solid #33465a;border-radius:8px}.comparison-table{border-collapse:collapse;width:100%;font-size:12px}.comparison-table th,.comparison-table td{padding:8px 10px;border-bottom:1px solid #33465a;text-align:left;white-space:nowrap}.comparison-table th{color:#d7b86a;position:sticky;top:0;background:#101b27}.comparison-state{font-size:12px;color:#b8c7d6;line-height:1.6}.native-selection-context{font-size:12px;color:#d7b86a;margin-top:12px;line-height:1.5}
-@media(max-width:650px){.native-kvk-data .native-kvk-grid{grid-template-columns:1fr}}
+.comparison-actions{display:flex;flex-wrap:wrap;gap:10px;margin:14px 0}.comparison-actions button{display:inline-flex!important;align-items:center;justify-content:center;width:auto!important;min-width:150px;flex:0 1 auto;padding:10px 16px!important;font-size:12px!important;line-height:1.3!important;min-height:38px!important;margin:0!important}.comparison-actions button:not(:disabled){cursor:pointer}.comparison-table-wrap{max-height:560px;overflow:auto;margin-top:12px;max-width:100%;border:1px solid #33465a;border-radius:8px}.comparison-table{border-collapse:collapse;width:100%;font-size:12px}.comparison-table th,.comparison-table td{padding:8px 10px;border-bottom:1px solid #33465a;text-align:left;white-space:nowrap}.comparison-table th{color:#d7b86a;position:sticky;top:0;background:#101b27}.comparison-state{font-size:12px;color:#b8c7d6;line-height:1.6}.native-selection-context{font-size:12px;color:#d7b86a;margin-top:12px;line-height:1.5}
+.comparison-detail-panel{display:block;margin-top:16px;min-width:0}.comparison-detail-panel[hidden]{display:none!important}.comparison-detail-panel h4{margin:0 0 6px}.comparison-detail-panel .comparison-table{min-width:1060px}.comparison-detail-panel .comparison-table-wrap{scrollbar-gutter:stable}.admin-module-card{min-width:0}.comparison-actions button:disabled{opacity:.5}@media(max-width:650px){.comparison-actions button{min-width:0;flex:1 1 140px}.page-shell{padding:12px 8px}.native-kvk-data .native-kvk-grid{grid-template-columns:1fr}}
 </style></head><body><main class="page-shell"><section class="panel admin-command-panel" id="adminPanel">
 <div class="admin-command-head">
 <div>
@@ -53,9 +53,14 @@ body{background:#0d101b;color:#eee;font-family:system-ui,sans-serif}
 <small>Historical: START → END · Active: START → LATEST</small><p class="native-selection-context" id="comparisonContext" aria-live="polite">Comparison source: loading…</p>
 <div class="comparison-actions"><button id="loadComparison" type="button" disabled>LOAD COMPARISON</button><button id="exportComparison" type="button" disabled>EXPORT CSV</button></div>
 <p class="comparison-state" id="comparisonState" role="status">Choose a KvK to load its comparison.</p>
-<div id="comparisonResults" hidden><p class="comparison-state" id="comparisonSummary"></p><div class="comparison-table-wrap"><table class="comparison-table"><thead><tr><th>Rank</th><th>Governor</th><th>ID</th><th>Start Power</th><th>KP</th><th>T4</th><th>T5</th><th>Deads</th><th>DKP</th><th>KPR</th><th>Requirement</th></tr></thead><tbody id="comparisonRows"></tbody></table></div></div>
+
 </article>
 </div>
+<section id="comparisonResults" class="admin-module-card comparison-detail-panel" hidden aria-label="Leadership comparison results">
+<h4>Governor Comparison</h4>
+<p class="comparison-state" id="comparisonSummary"></p>
+<div class="comparison-table-wrap" role="region" aria-label="Scrollable Governor comparison table" tabindex="0"><table class="comparison-table"><thead><tr><th>Rank</th><th>Governor</th><th>ID</th><th>Start Power</th><th>KP</th><th>T4</th><th>T5</th><th>Deads</th><th>DKP</th><th>KPR</th><th>Requirement</th></tr></thead><tbody id="comparisonRows"></tbody></table></div>
+</section>
 </section></main><script>
 'use strict';
 (async()=>{
