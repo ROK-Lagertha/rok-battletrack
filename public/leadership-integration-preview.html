@@ -162,21 +162,124 @@ body{background:#0d101b;color:#eee;font-family:system-ui,sans-serif}
 </style>
 <dialog id="btScanDialog" aria-label="Kingdom Scan local preview">
 <h3>Kingdom Scan · Local Preview</h3>
-<p>Choose an XLSX file and review its basic file metadata and target assignment. This stage does not parse Governor rows or import data.</p>
+<p>Choose an XLSX file and review its basic file metadata and target assignment. Governor rows are checked locally in your browser. Nothing is uploaded or imported.</p>
 <label for="btScanFile">Kingdom scan (.xlsx)</label><input id="btScanFile" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
 <label for="btScanKvk">Target KvK (read-only assignment)</label><select id="btScanKvk"></select>
 <label for="btScanSnapshot">Snapshot type</label><select id="btScanSnapshot"><option value="">Choose snapshot</option><option value="START">START</option><option value="MIDDLE">MIDDLE</option><option value="END">END</option></select>
 <div id="btScanReport" class="scan-report" role="status">No file selected. Nothing has been uploaded or saved.</div>
+<div id="btScanValidation" class="scan-report" hidden aria-live="polite"></div>
 <div class="scan-actions"><button type="button" id="btScanClose">CLOSE</button></div>
 </dialog>
 <script>
 (()=>{'use strict';
 const dlg=document.getElementById('btScanDialog'),file=document.getElementById('btScanFile'),kvk=document.getElementById('btScanKvk'),snap=document.getElementById('btScanSnapshot'),report=document.getElementById('btScanReport');
-const display=()=>{const f=file.files?.[0],target=kvk.value,kind=snap.value;
-if(!f){report.textContent='No file selected. Nothing has been uploaded or saved.';return;}
+
+const validation=document.getElementById('btScanValidation');
+let run=0;
+const xml=text=>{const d=new DOMParser().parseFromString(text,'application/xml');if(d.querySelector('parsererror'))throw Error('Invalid workbook XML');return d};
+const children=(node,name)=>Array.from(node?.children||[]).filter(n=>n.localName===name);
+const first=(node,name)=>children(node,name)[0];
+async function unpack(buffer){
+const view=new DataView(buffer),bytes=new Uint8Array(buffer),entries=new Map();
+let end=-1;for(let p=bytes.length-22;p>=Math.max(0,bytes.length-65557);p--){if(view.getUint32(p,true)===0x06054b50){end=p;break}}
+if(end<0)throw Error('Not a valid XLSX ZIP archive');
+let pos=view.getUint32(end+16,true),count=view.getUint16(end+10,true);
+if(count>3000)throw Error('Workbook contains too many ZIP entries');
+for(let i=0;i<count;i++){
+if(view.getUint32(pos,true)!==0x02014b50)throw Error('Invalid ZIP directory');
+const method=view.getUint16(pos+10,true),packed=view.getUint32(pos+20,true),nameLen=view.getUint16(pos+28,true),extra=view.getUint16(pos+30,true),comment=view.getUint16(pos+32,true),offset=view.getUint32(pos+42,true);
+const name=new TextDecoder().decode(bytes.slice(pos+46,pos+46+nameLen));pos+=46+nameLen+extra+comment;
+if(!/^(xl\/(workbook\.xml|_rels\/workbook\.xml\.rels|sharedStrings\.xml|worksheets\/[^/]+\.xml))$/.test(name))continue;
+if(view.getUint32(offset,true)!==0x04034b50)throw Error('Invalid ZIP entry');
+const dataStart=offset+30+view.getUint16(offset+26,true)+view.getUint16(offset+28,true);
+if(packed>25*1024*1024)throw Error('Compressed entry too large');
+let content=bytes.slice(dataStart,dataStart+packed);
+if(method===8){
+if(typeof DecompressionStream==='undefined')throw Error('Browser does not support XLSX decompression');
+const stream=new Blob([content]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+content=new Uint8Array(await new Response(stream).arrayBuffer());
+}else if(method!==0)throw Error('Unsupported ZIP compression');
+if(content.byteLength>45*1024*1024)throw Error('Worksheet too large');
+entries.set(name,new TextDecoder().decode(content));
+}
+return entries;
+}
+function cellText(cell,strings){
+const kind=cell.getAttribute('t'),v=first(cell,'v');
+if(kind==='inlineStr')return Array.from(cell.getElementsByTagName('*')).filter(n=>n.localName==='t').map(n=>n.textContent).join('');
+const raw=v?.textContent||'';
+if(kind==='s')return strings[Number(raw)]??'';
+return raw;
+}
+function parseSheet(source,strings){
+const doc=xml(source),rows=[];
+for(const row of Array.from(doc.getElementsByTagName('*')).filter(n=>n.localName==='row')){
+const values={};
+for(const c of children(row,'c')){
+const col=(c.getAttribute('r')||'').match(/^[A-Z]+/i)?.[0]||'A';
+let idx=0;for(const ch of col.toUpperCase())idx=idx*26+ch.charCodeAt(0)-64;
+values[idx-1]=cellText(c,strings);
+}
+rows.push(values);if(rows.length>150000)throw Error('Too many worksheet rows');
+}
+return rows;
+}
+function validate(rows){
+const aliases=[/^(governor\s*id|governorid|player\s*id|playerid|user\s*id|user_id|id)$/i,/^(governor|governor\s*name|player|player\s*name|name|nickname)$/i];
+let header=-1,idcol=-1,namecol=-1;
+for(let i=0;i<Math.min(35,rows.length);i++){
+const pairs=Object.entries(rows[i]).map(([k,v])=>[Number(k),String(v).trim()]);
+const ids=pairs.filter(([k,v])=>aliases[0].test(v));const names=pairs.filter(([k,v])=>aliases[1].test(v));
+if(ids.length){header=i;idcol=ids[0][0];namecol=names[0]?.[0]??-1;break}
+}
+if(header<0) return {ok:false,message:'Governor ID column not detected. Check the original scan template; no rows have been imported.',total:rows.length};
+const seen=new Set(),duplicates=[],invalid=[],samples=[];let count=0;
+for(let i=header+1;i<rows.length;i++){
+const r=rows[i],id=String(r[idcol]??'').trim(),name=namecol<0?'':String(r[namecol]??'').trim();
+if(!id&&!name)continue;count++;
+if(!/^\d{6,15}$/.test(id)){if(invalid.length<8)invalid.push('Row '+(i+1)+': '+(id||'(empty)'));continue}
+if(seen.has(id)){if(duplicates.length<8)duplicates.push('Row '+(i+1)+': '+id)}else seen.add(id);
+if(samples.length<5)samples.push(id+(name?' · '+name:''));
+}
+return {ok:invalid.length===0&&duplicates.length===0,count,unique:seen.size,invalid,duplicates,samples,header:header+1};
+}
+async function display(){
+const ticket=++run,f=file.files?.[0],target=kvk.value,kind=snap.value;
+validation.hidden=true;validation.textContent='';
+if(!f){report.textContent='No file selected. Nothing has been uploaded or saved.';return}
 const ext=/\.xlsx$/i.test(f.name),size=f.size<=25*1024*1024&&f.size>0;
-report.textContent='File: '+f.name+'\nSize: '+f.size.toLocaleString()+' bytes\nTarget KvK: '+(target||'Not selected')+'\nSnapshot: '+(kind||'Not selected')+'\nExtension: '+(ext?'OK':'INVALID')+'\nSize limit (25 MB): '+(size?'OK':'INVALID')+'\n\nLOCAL PREVIEW ONLY · No file upload, import, archive or database write.\nGovernor-row parsing and content validation will follow in CF-017.2.';
-};
+report.textContent='File: '+f.name+'\nSize: '+f.size.toLocaleString()+' bytes\nTarget KvK: '+(target||'Not selected')+'\nSnapshot: '+(kind||'Not selected')+'\nExtension: '+(ext?'OK':'INVALID')+'\nSize limit (25 MB): '+(size?'OK':'INVALID')+'\n\nLOCAL PREVIEW ONLY · No upload, import, archive or database write.';
+if(!ext||!size||!target||!kind)return;
+validation.hidden=false;validation.textContent='Reading XLSX locally…';
+try{
+const entries=await unpack(await f.arrayBuffer());if(ticket!==run)return;
+let strings=[];
+if(entries.has('xl/sharedStrings.xml')){
+const d=xml(entries.get('xl/sharedStrings.xml'));
+strings=Array.from(d.getElementsByTagName('*')).filter(n=>n.localName==='si').map(si=>Array.from(si.getElementsByTagName('*')).filter(n=>n.localName==='t').map(t=>t.textContent).join(''));
+}
+const workbook=xml(entries.get('xl/workbook.xml')||'');
+const sheets=Array.from(workbook.getElementsByTagName('*')).filter(n=>n.localName==='sheet');
+const rels=xml(entries.get('xl/_rels/workbook.xml.rels')||'');
+const relations=new Map(Array.from(rels.getElementsByTagName('*')).filter(n=>n.localName==='Relationship').map(r=>[r.getAttribute('Id'),r.getAttribute('Target')]));
+let reports=[];
+for(const s of sheets.slice(0,12)){
+const rel=s.getAttribute('r:id')||Array.from(s.attributes).find(a=>a.localName==='id')?.value;
+let path=relations.get(rel)||'';
+path=path.startsWith('/')?path.slice(1):path.startsWith('xl/')?path:'xl/'+path;
+const parts=[];for(const p of path.split('/')){if(p==='..')parts.pop();else if(p!=='.')parts.push(p)}path=parts.join('/');
+if(!entries.has(path))continue;
+reports.push({sheet:s.getAttribute('name')||'Sheet',result:validate(parseSheet(entries.get(path),strings))});
+}
+if(ticket!==run)return;
+if(!reports.length)throw Error('No readable worksheet found');
+const chosen=reports.find(r=>r.result.header)||reports[0],v=chosen.result;
+validation.textContent='LOCAL XLSX CONTENT CHECK\nWorksheet: '+chosen.sheet+'\n'+(v.header?'Header row: '+v.header+'\nGovernor rows: '+v.count+'\nUnique IDs: '+v.unique+'\nDuplicate IDs (sample): '+(v.duplicates.join('; ')||'None')+'\nInvalid IDs (sample): '+(v.invalid.join('; ')||'None')+'\nSample governors: '+(v.samples.join('; ')||'None')+'\n':'')+
+(v.ok?'Basic ID checks passed.':'REVIEW REQUIRED: '+(v.message||'Possible invalid or duplicate Governor IDs.'))+
+'\n\nThis is a preliminary local preview, NOT import approval. Closed KvKs are NOT yet enforced. No data saved.';
+}catch(e){if(ticket===run)validation.textContent='Unable to inspect XLSX: '+e.message+'\nNo data uploaded or saved.'}
+}
+
 document.getElementById('openScanPreview').addEventListener('click',()=>{
 const source=document.getElementById('kvkSelect');kvk.replaceChildren();for(const opt of source.options){const o=document.createElement('option');o.value=opt.value;o.textContent=opt.textContent;kvk.append(o)}kvk.value=source.value;display();dlg.showModal();});
 document.getElementById('btScanClose').addEventListener('click',()=>dlg.close());
