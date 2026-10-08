@@ -20,8 +20,40 @@ async function key(env){if(!env.SESSION_SECRET||!env.DISCORD_CLIENT_SECRET)throw
 async function seal(env,data){const iv=crypto.getRandomValues(new Uint8Array(12));const ct=new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM',iv},await key(env),encoder.encode(JSON.stringify(data))));return bytesTo64(iv)+'.'+bytesTo64(ct);}
 async function unseal(env,value){try{const [a,b]=value.split('.');if(!a||!b)return null;const raw=await crypto.subtle.decrypt({name:'AES-GCM',iv:from64(a)},await key(env),from64(b));return JSON.parse(decoder.decode(raw));}catch{return null;}}
 function errorPage(msg){return new Response(`<!doctype html><html lang="en"><meta charset="utf-8"><title>BattleTrack Login</title><body style="background:#101423;color:#eee;font:16px system-ui;max-width:560px;margin:12vh auto;padding:24px"><h1>BattleTrack · Discord Access</h1><p>${msg}</p><a style="color:#a5a6ff" href="/">Back to BattleTrack</a></body></html>`,{status:403,headers:{'content-type':'text/html; charset=utf-8','cache-control':'no-store','content-security-policy':"default-src 'none'; style-src 'unsafe-inline'"}});}
-async function discordGet(path,token){const r=await fetch('https://discord.com/api/v10'+path,{headers:{authorization:'Bearer '+token,accept:'application/json'}});if(!r.ok)return null;return r.json();}
-async function memberCheck(token){const [user,member]=await Promise.all([discordGet('/users/@me',token),discordGet(`/users/@me/guilds/${GUILD_ID}/member`,token)]);if(!user?.id||!Array.isArray(member?.roles))return null;return {user,roles:member.roles,allowed:REQUIRED.every(role=>member.roles.includes(role))};}
+async function discordGet(path,token,scheme='Bearer'){
+  try {
+    const r=await fetch('https://discord.com/api/v10'+path,{headers:{authorization:scheme+' '+token,accept:'application/json'}});
+    if(!r.ok)return {ok:false,status:r.status};
+    return {ok:true,data:await r.json()};
+  } catch { return {ok:false,status:0}; }
+}
+async function memberCheck(token,env){
+  const u=await discordGet('/users/@me',token);
+  if(!u.ok||!u.data?.id)return {allowed:false,reason:'discord_user_unavailable'};
+  const user=u.data;
+  const m=await discordGet(`/users/@me/guilds/${GUILD_ID}/member`,token);
+  let roles=Array.isArray(m.data?.roles)?m.data.roles:null;
+  // Optional server-to-server fallback when Discord's OAuth guild-member endpoint
+  // cannot provide roles. Never trust a user-supplied role or client-side assertion.
+  if(!roles&&env.DISCORD_BOT_TOKEN){
+    const b=await discordGet(`/guilds/${GUILD_ID}/members/${encodeURIComponent(user.id)}`,env.DISCORD_BOT_TOKEN,'Bot');
+    if(Array.isArray(b.data?.roles))roles=b.data.roles;
+  }
+  if(!roles)return {user,allowed:false,reason:m.status===404?'guild_membership_not_found':'discord_membership_unavailable'};
+  const required=[env.DISCORD_OFFICER_ROLE_ID||REQUIRED[0],env.DISCORD_DATA_ROLE_ID||REQUIRED[1]];
+  const missing=required.filter(id=>!roles.includes(id));
+  return {user,allowed:missing.length===0,reason:missing.length?'missing_roles':'ok',missing,roles};
+}
+function accessDenied(member,env){
+  // Only IDs are displayed to the user; no OAuth tokens or application secrets.
+  let detail='Discord could not confirm your server membership.';
+  if(member?.reason==='missing_roles')detail='Discord confirmed your membership, but the configured Officer/Data role IDs do not both match your roles.';
+  if(member?.reason==='guild_membership_not_found')detail='Discord did not find your membership in the configured server.';
+  const expected=[env.DISCORD_OFFICER_ROLE_ID||REQUIRED[0],env.DISCORD_DATA_ROLE_ID||REQUIRED[1]].join(', ');
+  const assigned=(member?.roles||[]).join(', ')||'(unavailable)';
+  const html=`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>BattleTrack · Discord Access</title><body style="background:#0a1421;color:#f1f5f9;font:16px system-ui;max-width:760px;margin:8vh auto;padding:24px"><h1 style="color:#f3c36b">Discord access check</h1><p>${detail}</p><p style="color:#a8bfd0">Diagnostic: ${member?.reason||'unknown'}</p><p style="color:#a8bfd0;overflow-wrap:anywhere">Configured role IDs: ${expected}</p><p style="color:#a8bfd0;overflow-wrap:anywhere">Your Discord role IDs: ${assigned}</p><p>Nothing was changed. Leadership access remains protected.</p><a style="color:#f3c36b" href="/api/auth/discord/login">Retry Discord login</a></body></html>`;
+  return new Response(html,{status:403,headers:{'content-type':'text/html; charset=utf-8','cache-control':'no-store','content-security-policy':"default-src 'none'; style-src 'unsafe-inline'"}});
+}
 export async function discordAuth(request,env,path){
   if(request.method!=='GET'&&path!=='/api/auth/discord/logout')return json({ok:false,error:'Method not allowed'},405);
   if(path==='/api/auth/discord/login'){
@@ -37,8 +69,8 @@ export async function discordAuth(request,env,path){
     const r=await fetch('https://discord.com/api/v10/oauth2/token',{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},body:params});
     if(!r.ok)return errorPage('Discord could not complete authorization. Please retry.');
     const tokens=await r.json();if(!tokens.access_token)return errorPage('Discord did not return an access token.');
-    const member=await memberCheck(tokens.access_token);
-    if(!member?.allowed)return new Response(errorPage('Access denied. Membership and BOTH Officer + Data roles are required.').body,{status:403,headers:{'content-type':'text/html; charset=utf-8','cache-control':'no-store','set-cookie':clear(STATE)}});
+    const member=await memberCheck(tokens.access_token,env);
+    if(!member?.allowed){const denied=accessDenied(member,env);const h=new Headers(denied.headers);h.append('set-cookie',clear(STATE));return new Response(denied.body,{status:403,headers:h});}
     const expires=Math.min(Date.now()+60*60*1000,Date.now()+Math.max(0,(tokens.expires_in||3600)-60)*1000);
     const session=await seal(env,{token:tokens.access_token,userId:member.user.id,exp:expires});
     const headers=new Headers({location:'/leadership','cache-control':'no-store'});
@@ -48,7 +80,7 @@ export async function discordAuth(request,env,path){
   if(path==='/api/auth/discord/logout')return new Response(null,{status:204,headers:{'set-cookie':clear(COOKIE),'cache-control':'no-store'}});
   if(path==='/api/auth/discord/me'){
     const session=await unseal(env,getCookie(request,COOKIE));if(!session||session.exp<Date.now())return json({ok:false,authenticated:false},401);
-    const member=await memberCheck(session.token);if(!member?.allowed||member.user.id!==session.userId)return json({ok:false,authenticated:false,reason:'roles_or_membership'},403);
+    const member=await memberCheck(session.token,env);if(!member?.allowed||member.user.id!==session.userId)return json({ok:false,authenticated:false,reason:'roles_or_membership'},403);
     return json({ok:true,authenticated:true,user:{id:member.user.id,username:member.user.username,global_name:member.user.global_name},leadershipAccess:true});
   }
   return json({ok:false,error:'Not found'},404);
