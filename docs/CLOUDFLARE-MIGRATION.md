@@ -33,3 +33,9 @@ Important: the Cloudflare Worker project name must match `rok-battletrack` from 
 - A `DISCORD LOGIN · TEST` link is visible in the main navigation. It tests login but **does not unlock any legacy Admin functions**. Existing Apps Script login is unchanged.
 - Required production secrets: `DISCORD_CLIENT_SECRET`, `SESSION_SECRET`. OAuth redirect: `https://rok-battletrack.jici1203.workers.dev/api/auth/discord/callback`.
 - Verify authorized user, one-role user, non-member, state replay/expiry, logout. Admin APIs require a later secured migration.
+
+### CF-012.1 – Secure Leadership API (read-only pilot)
+- `GET /api/v1/leadership/kvks`: Discord Officer **AND** Data required, verified server-side on every request via existing Discord OAuth session.
+- 401 without a valid session, 403 for revoked/missing roles, 405 for non-GET requests. No shared caching.
+- Pilot response contains **existing public ranking metadata** only (`source: public_ranking_metadata`), not the legacy admin KvK list. This deliberately tests authorization without opening any privileged Apps Script API.
+- Next: design and migrate a separately authenticated server-to-server bridge for actual admin-only KvK reads, then write endpoints. Do not expose existing Apps Script admin operations through a public GET action.

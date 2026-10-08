@@ -108,6 +108,23 @@ export default {
       catch (error) { console.error("Discord OAuth error", error); return apiError(503, "AUTH_UNAVAILABLE", "Discord login temporarily unavailable."); }
     }
 
+    // CF-012.1: read-only leadership gateway pilot. Authorization is checked
+    // server-side on every request; no legacy Apps Script admin APIs are exposed.
+    if (url.pathname === "/api/v1/leadership/kvks") {
+      if (request.method !== "GET") return apiError(405, "METHOD_NOT_ALLOWED", "GET required.");
+      try {
+        const auth = await discordAuth(request, env, "/api/auth/discord/me");
+        if (!auth.ok) return apiError(auth.status === 401 ? 401 : 403, "LEADERSHIP_ACCESS_DENIED", "Valid Discord Officer and Data roles are required.");
+        // Pilot uses already-public season catalog. True admin-only KvK data
+        // must be migrated separately with an authenticated upstream bridge.
+        const source = await fetchAppsScriptJson(env, { action: "rankingMeta" });
+        return json({ ok: true, access: "leadership", source: "public_ranking_metadata", data: source });
+      } catch (error) {
+        console.error("Leadership pilot failed", error);
+        return apiError(503, "LEADERSHIP_SOURCE_UNAVAILABLE", "Leadership read source temporarily unavailable.");
+      }
+    }
+
     if (url.pathname === "/api/health") {
       return json({
         ok: true,
