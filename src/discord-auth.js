@@ -77,10 +77,10 @@ export async function discordAuth(request,env,path){
     headers.append('set-cookie',cookie(COOKIE,session,3600));headers.append('set-cookie',clear(STATE));
     return new Response(null,{status:302,headers});
   }
-  if(path==='/api/auth/discord/logout')return new Response(null,{status:204,headers:{'set-cookie':clear(COOKIE),'cache-control':'no-store'}});
+  if(path==='/api/auth/discord/logout')return new Response(null,{status:303,headers:{'location':'/api/auth/discord/login','set-cookie':clear(COOKIE),'cache-control':'no-store'}});
   if(path==='/api/auth/discord/me'){
     const session=await unseal(env,getCookie(request,COOKIE));if(!session||session.exp<Date.now())return json({ok:false,authenticated:false},401);
-    const member=await memberCheck(session.token,env);if(!member?.allowed||member.user.id!==session.userId)return json({ok:false,authenticated:false,reason:'roles_or_membership'},403);
+    const member=await memberCheck(session.token,env);if(!member?.allowed||member.user?.id!==session.userId)return json({ok:false,authenticated:false,reason:member?.reason||'roles_or_membership'},403);
     return json({ok:true,authenticated:true,user:{id:member.user.id,username:member.user.username,global_name:member.user.global_name},leadershipAccess:true});
   }
   return json({ok:false,error:'Not found'},404);

@@ -134,7 +134,13 @@ export default {
       try {
         const check = await discordAuth(request, env, "/api/auth/discord/me");
         if (!check.ok) {
-          return Response.redirect(new URL("/api/auth/discord/login", request.url), 302);
+          // Only an absent/expired session may start OAuth. A forbidden session
+          // must not trigger another login, otherwise callback -> leadership
+          // -> login -> callback can loop indefinitely.
+          if (check.status === 401) {
+            return Response.redirect(new URL("/api/auth/discord/login", request.url), 302);
+          }
+          return new Response(`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>BattleTrack · Leadership access</title><body style="background:#0a1421;color:#f1f5f9;font:16px system-ui;max-width:760px;margin:8vh auto;padding:24px"><h1 style="color:#f3c36b">Leadership authorization needs attention</h1><p>Discord sign-in completed, but your Officer + Data roles could not be verified for this session. The application has stopped automatic redirects to avoid a login loop.</p><p>Use the button below to clear only the BattleTrack session and try again.</p><form method="post" action="/api/auth/discord/logout"><button style="padding:12px 20px;border:1px solid #f3c36b;border-radius:8px;background:#142333;color:#f3c36b">Reset BattleTrack session</button></form></body></html>`,{status:403,headers:{'content-type':'text/html; charset=utf-8','cache-control':'no-store'}});
         }
         const assetUrl = new URL("/leadership.html", request.url);
         const response = await env.ASSETS.fetch(new Request(assetUrl, request));
