@@ -231,7 +231,12 @@ function adminGetLeadershipKvks(token) {
 function adminGetKvkComparison(token, kvkId) {
   const user = getAdminSessionUser_(token);
   if (!user) return { ok:false, code:'SESSION_EXPIRED', message:'Admin session expired.' };
+  return btReadKvkComparison_(kvkId);
+}
 
+// CF-015.1: shared read-only implementation; accessible only via authenticated admin
+// or HMAC-verified, nonce-protected bridge.
+function btReadKvkComparison_(kvkId) {
   kvkId = String(kvkId || '').trim();
   if (!kvkId) return { ok:false, code:'MISSING_KVK', message:'Please select a KvK.' };
 

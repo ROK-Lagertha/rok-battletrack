@@ -9,9 +9,13 @@ function btBridgeGet_(e) {
     var timestamp = String(p.timestamp || '');
     var nonce = String(p.nonce || '');
     var signature = String(p.signature || '').toLowerCase();
-    if (action !== 'kvkManagement' || !/^\d{10}$/.test(timestamp) || !/^[a-f0-9-]{36}$/i.test(nonce) || !/^[a-f0-9]{64}$/.test(signature)) return output({ok:false,code:'INVALID_REQUEST'});
+    if (['kvkManagement','kvkComparison'].indexOf(action) === -1 || !/^\d{10}$/.test(timestamp) || !/^[a-f0-9-]{36}$/i.test(nonce) || !/^[a-f0-9]{64}$/.test(signature)) return output({ok:false,code:'INVALID_REQUEST'});
     if (Math.abs(Math.floor(Date.now()/1000)-Number(timestamp)) > 90) return output({ok:false,code:'EXPIRED_REQUEST'});
-    var bytes = Utilities.computeHmacSha256Signature(timestamp+'\n'+nonce+'\n'+action, secret);
+    var kvkId = String(p.kvkId || '');
+    if (action === 'kvkComparison' && !/^3903-KVK[1-9][0-9]{0,5}$/.test(kvkId)) return output({ok:false,code:'INVALID_KVK'});
+    if (action === 'kvkManagement' && kvkId) return output({ok:false,code:'INVALID_REQUEST'});
+    var signedMessage = timestamp+'\n'+nonce+'\n'+action+(action === 'kvkComparison' ? '\n'+kvkId : '');
+    var bytes = Utilities.computeHmacSha256Signature(signedMessage, secret);
     var expected = bytes.map(function(b){return ('0'+(b & 255).toString(16)).slice(-2);}).join('');
     var diff = 0;
     for (var i=0;i<64;i++) diff |= expected.charCodeAt(i)^signature.charCodeAt(i);
@@ -24,6 +28,7 @@ function btBridgeGet_(e) {
       if (cache.get(replayKey)) return output({ok:false,code:'REPLAY'});
       cache.put(replayKey,'1',180);
     } finally { lock.releaseLock(); }
+    if (action === 'kvkComparison') return output(btReadKvkComparison_(kvkId));
     var ss = getDatabase_();
     var kvkSheet = ss.getSheetByName(BT.SHEETS.KVKS);
     var storySheet = ss.getSheetByName(BT.SHEETS.STORIES);

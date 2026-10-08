@@ -55,19 +55,18 @@ async function fetchAppsScriptJson(env, params) {
 }
 
 // CF-014.1: signed, read-only Apps Script bridge. No admin token in browser.
-async function leadershipManagement(env) {
+async function leadershipManagement(env, action = "kvkManagement", kvkId = "") {
   const secret = String(env.BT_BRIDGE_SECRET || "");
   if (secret.length < 32) throw new Error("Bridge secret missing or too short");
   const base = getAppsScriptApiUrl(env);
   if (!base) throw new Error("Apps Script URL missing");
   const timestamp = String(Math.floor(Date.now() / 1000));
   const nonce = crypto.randomUUID();
-  const action = "kvkManagement";
-  const message = `${timestamp}\n${nonce}\n${action}`;
+  const message = `${timestamp}\n${nonce}\n${action}${action === "kvkComparison" ? `\n${kvkId}` : ""}`;
   const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
   const signature = Array.from(new Uint8Array(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(message)))).map(x => x.toString(16).padStart(2,"0")).join("");
   const target = new URL(base);
-  for (const [k,v] of Object.entries({ bridge: "1", action, timestamp, nonce, signature })) target.searchParams.set(k,v);
+  for (const [k,v] of Object.entries({ bridge: "1", action, timestamp, nonce, signature, ...(kvkId ? {kvkId} : {}) })) target.searchParams.set(k,v);
   const response = await fetch(target.toString(), { method: "GET", headers: { accept: "application/json" }, redirect: "follow" });
   const payload = await response.json();
   if (!response.ok || !payload?.ok) throw new Error("Bridge upstream rejected request");
@@ -130,6 +129,24 @@ export default {
 
     // CF-012.1: read-only leadership gateway pilot. Authorization is checked
     // server-side on every request; no legacy Apps Script admin APIs are exposed.
+    // CF-015.1: protected, uncached, read-only comparison of an existing KvK.
+    const comparisonMatch = url.pathname.match(/^\/api\/v1\/leadership\/comparisons\/([^/]+)$/);
+    if (comparisonMatch) {
+      if (request.method !== "GET") return apiError(405, "METHOD_NOT_ALLOWED", "GET required.");
+      const kvkId = decodeURIComponent(comparisonMatch[1]);
+      if (!/^3903-KVK[1-9][0-9]{0,5}$/.test(kvkId)) return apiError(400, "INVALID_KVK", "Invalid KvK ID.");
+      try {
+        const auth = await discordAuth(request, env, "/api/auth/discord/me");
+        if (!auth.ok) return apiError(auth.status === 401 ? 401 : 403, "LEADERSHIP_ACCESS_DENIED", "Valid Discord Officer and Data roles are required.");
+        const data = await leadershipManagement(env, "kvkComparison", kvkId);
+        if (!data.ok) return json({ok:false,code:data.code||"COMPARISON_UNAVAILABLE",message:data.message||"Comparison unavailable."},{status:data.code==="KVK_NOT_FOUND"?404:503});
+        return json({ok:true,access:"leadership",source:"signed_kvk_comparison",data});
+      } catch (error) {
+        console.error("Leadership comparison failed", error);
+        return apiError(503, "COMPARISON_SOURCE_UNAVAILABLE", "Leadership comparison temporarily unavailable.");
+      }
+    }
+
     if (url.pathname === "/api/v1/leadership/kvks") {
       if (request.method !== "GET") return apiError(405, "METHOD_NOT_ALLOWED", "GET required.");
       try {
