@@ -88,88 +88,6 @@ async function rankingSeason(request, env, kvkId) {
 }
 
 
-async function diagnoseAppsScriptBridge(env) {
-  const base = getAppsScriptApiUrl(env);
-  if (!base) {
-    return json({
-      ok: false,
-      diagnostic: true,
-      stage: "configuration",
-      configured: false,
-      message: "APPS_SCRIPT_API_URL is not configured."
-    });
-  }
-
-  try {
-    const upstream = new URL(base);
-    upstream.searchParams.set("api", "1");
-    upstream.searchParams.set("action", "rankingMeta");
-
-    const response = await fetch(upstream.toString(), {
-      method: "GET",
-      headers: { "accept": "application/json" },
-      redirect: "follow"
-    });
-
-    const contentType = response.headers.get("content-type") || "";
-    const text = await response.text();
-
-    let jsonParsed = false;
-    let payloadSummary = null;
-    try {
-      const parsed = JSON.parse(text);
-      jsonParsed = true;
-      payloadSummary = {
-        success: parsed?.success ?? null,
-        ok: parsed?.ok ?? null,
-        hasSeasons: Array.isArray(parsed?.seasons),
-        seasonCount: Array.isArray(parsed?.seasons) ? parsed.seasons.length : null,
-        errorCode: parsed?.error?.code || parsed?.code || null,
-        errorMessage: parsed?.error?.message || parsed?.message || null
-      };
-    } catch (_) {}
-
-    const looksLikeHtml = /^\s*<!doctype html|^\s*<html/i.test(text);
-    const looksLikeGoogleLogin =
-      /accounts\.google\.com|ServiceLogin|Sign in - Google Accounts/i.test(text);
-    const looksLikeBattleTrack =
-      /ROK BattleTrack|BattleTrack/i.test(text);
-
-    return json({
-      ok: response.ok && jsonParsed,
-      diagnostic: true,
-      stage: "apps-script-upstream",
-      configured: true,
-      upstreamStatus: response.status,
-      upstreamStatusText: response.statusText,
-      redirected: response.redirected,
-      finalHost: (() => { try { return new URL(response.url).host; } catch (_) { return null; } })(),
-      contentType,
-      jsonParsed,
-      looksLikeHtml,
-      looksLikeGoogleLogin,
-      looksLikeBattleTrack,
-      bodyLength: text.length,
-      payloadSummary
-    }, {
-      status: 200,
-      headers: { "cache-control": "no-store" }
-    });
-  } catch (error) {
-    return json({
-      ok: false,
-      diagnostic: true,
-      stage: "fetch-exception",
-      configured: true,
-      errorName: error?.name || "Error",
-      errorMessage: String(error?.message || error)
-    }, {
-      status: 200,
-      headers: { "cache-control": "no-store" }
-    });
-  }
-}
-
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -181,10 +99,6 @@ export default {
         stage: "cloudflare-migration",
         baseline: "v1.12.2b"
       });
-    }
-
-    if (request.method === "GET" && url.pathname === "/api/diagnostics/apps-script") {
-      return await diagnoseAppsScriptBridge(env);
     }
 
     try {
