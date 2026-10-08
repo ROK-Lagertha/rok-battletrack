@@ -1,6 +1,6 @@
 # ⚔️ ROK BattleTrack – Kingdom 3903
 
-**Cloudflare migration: CF-009 / CF-010 / CF-011 live-tested (2026-10-08)**  
+**Cloudflare migration checkpoint: CF-014.6 preview tested (2026-10-08); CF-015 next**  
 **Apps Script reference baseline: v1.12.2b**  
 **Verified stable baseline: v1.11.5.2**
 
@@ -352,12 +352,17 @@ v1.12.2b remains the functional Apps Script reference baseline. Cloudflare migra
 | CF-009 | Complete | Cloudflare-to-Apps-Script bridge; rankings API; temporary diagnostics removed after testing |
 | CF-010 | Complete | Governor ID lookup migrated to the Cloudflare API and confirmed in live UI |
 | CF-011 | Complete | Kingdom rankings covered by CF-009: KvK2/3/4, category and season switching, reload |
-| CF-012 | Next | Leadership authentication: secure Cloudflare sessions, authorization and logout |
+| CF-012 | Live-tested | Discord OAuth, Officer + Data role authorization and logout; restricted access rejected |
+| CF-013 | Preview tested | Protected Leadership access and navigation; original Apps Script Leadership remains separate |
+| CF-014.1 | Live-tested | Signed, read-only Cloudflare → Apps Script KvK management bridge; unauthorized request denied |
+| CF-014.2–014.4 | Preview tested | KvK selector, 16 stories, local-only Create → Active → Close sandbox; no writes |
+| CF-014.5–014.6 | Preview tested | Native Leadership integration preview; selected KvK context shared with Overview and Comparison; actions disabled |
+| CF-015 | Next | Comparison & CSV migration and parity testing against Apps Script baseline |
 
 **Confirmed live on 2026-10-08:** Kingdom 3903 historical KvK2, KvK3 and KvK4 ranking metadata, DKP/KPR/KP/KILLS selection, season switching, reload, and public Governor Lookup. No change to ranking formulas, existing player calculations, scan imports or KvK closure rules.
 
-### CF-012 — Leadership authentication safety boundary
-- The current Apps Script admin login remains the reference until Cloudflare auth passes dedicated tests.
+### Cloudflare Leadership safety boundary
+- The Apps Script admin login and original Leadership Command Center remain in place until all Cloudflare features pass full regression and the final cutover is approved.
 - Cloudflare must validate credentials and authorization **server-side**; UI visibility alone does not grant access.
 - Use secure, short-lived, HttpOnly cookies (Secure, SameSite), CSRF protection for state-changing requests, explicit logout and server-side session invalidation.
 - Support multiple Leadership accounts without embedding passwords, hashes, session tokens or privileged API keys in public assets or Git history.
@@ -382,9 +387,15 @@ It should **not** contain:
 
 ## 🏷️ Release status
 
-### Cloudflare migration — CF-009 through CF-011 live-tested (2026-10-08)
-- Rankings and Governor Lookup served via Cloudflare Worker API, with Apps Script and Google Sheets as current data source.
-- CF-012 Leadership authentication pending.
+### Cloudflare migration checkpoint — CF-014.6 (2026-10-08)
+- Public rankings and Governor Lookup live-tested through Cloudflare Worker APIs.
+- Discord OAuth and Officer + Data access control live-tested, including unauthorized access denial.
+- Signed KvK management read-only bridge live-tested: 3 historical KvKs and 16 story variants.
+- Local-only KvK Create → Active → Close simulation tested; API rechecked afterward: `nextKvkId=3903-KVK5`, `nextNumber=5`, 3 tracked KvKs.
+- Separate native Leadership integration preview tested: KvK context synchronized across Management, Overview and Comparison; write actions disabled.
+- **Not migrated yet:** live Leadership Comparison/CSV, real Kingdom Overview, scan/import/integrity and protected KvK writes. Original Apps Script Leadership login remains in place.
+- **Do not claim production cutover or full Leadership feature parity.** This is a source-code checkpoint, not a completed Cloudflare release.
+- Checkpoint procedure: `docs/CLOUDFLARE-CF0146-CHECKPOINT.md`.
 
 ### v1.12.2b — Apps Script reference baseline
 Highlights:
