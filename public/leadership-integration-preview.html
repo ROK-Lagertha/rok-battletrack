@@ -34,7 +34,7 @@ body{background:#0d101b;color:#eee;font-family:system-ui,sans-serif}
 <p>Select the KvK for Leadership. Creating or closing KvKs remains disabled.</p>
 <div class="admin-module-actions"><button disabled="" title="Disabled in read-only integration review" type="button">ADD NEW KVK</button><button disabled="" title="Disabled in read-only integration review" type="button">CLOSE KVK</button></div>
 <small>Create or safely close a tracked KvK</small>
-<div class="native-kvk-data"><p id="status" role="status" hidden>Checking Leadership authorization…</p><div hidden="" id="content"><label for="kvkSelect">SELECT KVK</label> <select id="kvkSelect"></select></div></div></article>
+<p id="status" role="status" hidden>Checking Leadership authorization…</p></article>
 <article class="admin-module-card">
 <h4>Kingdom Scan</h4>
 <p>Select a Kingdom scan and validate it locally before any future import into BattleTrack.</p>
@@ -50,6 +50,7 @@ body{background:#0d101b;color:#eee;font-family:system-ui,sans-serif}
 <article class="admin-module-card">
 <h4>Comparison &amp; Export</h4>
 <p>Load the selected KvK comparison and export its Governor data as CSV.</p>
+<div class="native-kvk-data"><div hidden="" id="content"><label for="kvkSelect">SELECT KVK</label> <select id="kvkSelect"></select></div></div>
 <small>Historical: START → END · Active: START → LATEST</small><p class="native-selection-context" id="comparisonContext" aria-live="polite">Comparison source: loading…</p>
 <div class="comparison-actions"><button id="loadComparison" type="button" disabled>LOAD COMPARISON</button><button id="exportComparison" type="button" disabled>EXPORT CSV</button></div>
 <p class="comparison-state" id="comparisonState" role="status">Choose a KvK to load its comparison.</p>
