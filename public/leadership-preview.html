@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BattleTrack · Leadership Preview</title>
+<style>
+:root{color-scheme:dark;font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:#101522;color:#f4f1ff}*{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(circle at 20% 0%,#292248 0,transparent 50%),#101522}main{max-width:880px;margin:auto;padding:38px 20px}a{color:#d4c4ff}h1{font-size:clamp(26px,5vw,38px);margin:10px 0}.eyebrow{color:#bfa8ff;letter-spacing:.17em;font-size:12px;font-weight:700}.muted{color:#b9b8c9}.panel{border:1px solid #554b79;background:#1b1d30;border-radius:16px;padding:24px;margin:24px 0}.buttons{display:flex;gap:10px;flex-wrap:wrap}.btn{border:1px solid #9b7fe2;border-radius:9px;background:#6c4db3;color:white;font-weight:700;padding:11px 16px;text-decoration:none;cursor:pointer;font:inherit}.btn.secondary{background:transparent}.btn:disabled{opacity:.6;cursor:wait}#status{font-weight:650}ul{list-style:none;padding:0;margin:18px 0 0}li{padding:14px 0;border-top:1px solid #47425d;display:flex;gap:10px;justify-content:space-between;flex-wrap:wrap}small{color:#b9b8c9}.hidden{display:none!important}
+</style>
+</head>
+<body><main>
+<a href="/">← Back to BattleTrack</a>
+<div class="eyebrow" style="margin-top:32px">KINGDOM 3903 · DISCORD PROTECTED</div>
+<h1>Leadership Command Center</h1>
+<p class="muted">CF-013 · Read-only preview. No administration, scans, or KvK changes are available on this page.</p>
+<section class="panel" aria-live="polite"><h2>Discord access</h2><p id="status">Checking session…</p><p class="muted" id="identity"></p>
+<div class="buttons"><a class="btn hidden" id="login" href="/api/auth/discord/login">Login with Discord</a><button class="btn secondary hidden" id="logout" type="button">Logout</button><button class="btn secondary" id="refresh" type="button">Refresh access</button></div></section>
+<section class="panel hidden" id="kvk-panel"><h2>Tracked KvKs</h2><p class="muted">Protected API · public season metadata used for this pilot</p><ul id="seasons"></ul></section>
+<p class="muted"><small>Legacy Apps Script administration remains unchanged during migration. Access to this preview does not grant access to the legacy admin functions.</small></p>
+</main>
+<script>
+'use strict';
+const el=id=>document.getElementById(id);
+const status=el('status'), identity=el('identity'), panel=el('kvk-panel'), list=el('seasons');
+function reset(){panel.classList.add('hidden');list.replaceChildren();identity.textContent='';el('login').classList.add('hidden');el('logout').classList.add('hidden')}
+async function check(){reset();status.textContent='Checking Discord permissions…';el('refresh').disabled=true;try{
+const authResponse=await fetch('/api/auth/discord/me',{credentials:'same-origin',cache:'no-store'});
+const auth=await authResponse.json();
+if(!authResponse.ok||auth.authenticated!==true||auth.leadershipAccess!==true||!auth.user?.id){status.textContent='Access denied. Both Officer and Data roles are required.';el('login').classList.remove('hidden');return}
+status.textContent='Discord access confirmed';identity.textContent=auth.user.global_name||auth.user.username||'Authorized officer';el('logout').classList.remove('hidden');
+const dataResponse=await fetch('/api/v1/leadership/kvks',{credentials:'same-origin',cache:'no-store'});
+const result=await dataResponse.json();
+if(!dataResponse.ok||result.ok!==true||result.access!=='leadership'||!Array.isArray(result.data?.seasons)){status.textContent='Leadership API denied access or returned an invalid response.';return}
+for(const season of result.data.seasons){const li=document.createElement('li');const name=document.createElement('strong');name.textContent=season.seasonName||season.kvkId||'KvK';const meta=document.createElement('small');meta.textContent=season.status||'';li.append(name,meta);list.append(li)}panel.classList.remove('hidden');
+}catch{status.textContent='Could not check access. Please try again.'}finally{el('refresh').disabled=false}}
+el('refresh').addEventListener('click',check);
+el('logout').addEventListener('click',async()=>{el('logout').disabled=true;try{const r=await fetch('/api/auth/discord/logout',{method:'GET',credentials:'same-origin',cache:'no-store'});if(!r.ok)throw new Error('logout failed');await check()}catch{status.textContent='Logout failed. Please retry.'}finally{el('logout').disabled=false}});
+check();
+</script></body></html>
