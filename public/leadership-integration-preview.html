@@ -44,7 +44,7 @@ body{background:#0d101b;color:#eee;font-family:system-ui,sans-serif}
 <article class="admin-module-card">
 <h4>Current KvK Overview</h4>
 <p>Leadership view for Governor performance, Requirements and current progress.</p>
-<button disabled="" title="Disabled in read-only integration review" type="button">OPEN KVK OVERVIEW</button>
+<button id="openKvkOverview" type="button" disabled>OPEN KVK OVERVIEW</button>
 <small>Available when scan data exists for the selected KvK</small><p class="native-selection-context" id="overviewContext" aria-live="polite">Selected KvK: loading…</p>
 </article>
 <article class="admin-module-card">
@@ -104,8 +104,51 @@ body{background:#0d101b;color:#eee;font-family:system-ui,sans-serif}
   const data=result.data, list=data.kvks, select=document.getElementById('kvkSelect');
   const set=(id,value)=>document.getElementById(id).textContent=value??'—';
   for(const kvk of list){const option=document.createElement('option');option.value=kvk.id;option.textContent='KvK '+kvk.number+' · '+kvk.seasonName;select.append(option)}
-  function render(){const kvk=list.find(x=>x.id===select.value);if(!kvk)return;set('overviewContext','Selected KvK: '+kvk.id+' · '+kvk.seasonName+' (read-only context; overview action disabled)');set('comparisonContext','Comparison source: '+kvk.id+' · '+(kvk.status==='Historical'?'START → END':'START → LATEST'));resetComparison()}
-  select.addEventListener('change',render);render();byId('loadComparison').disabled=false;content.hidden=false;status.textContent='';status.hidden=true;
+  function render(){const kvk=list.find(x=>x.id===select.value);if(!kvk)return;set('overviewContext','Selected KvK: '+kvk.id+' · '+kvk.seasonName+' (read-only)');set('comparisonContext','Comparison source: '+kvk.id+' · '+(kvk.status==='Historical'?'START → END':'START → LATEST'));resetComparison()}
+  select.addEventListener('change',render);render();byId('loadComparison').disabled=false;byId('openKvkOverview').disabled=false;content.hidden=false;status.textContent='';status.hidden=true;
  }catch(error){status.hidden=false;status.textContent=error.message+' No KvK data displayed.';document.getElementById('overviewContext').textContent='No authorized KvK context available.';document.getElementById('comparisonContext').textContent='No authorized KvK context available.'}
+})();
+</script><style>
+/* CF-016: Scoped overview dialog. No changes to existing four-card layout. */
+#btOverviewDialog{border:1px solid #977337;border-radius:12px;background:#0c1925;color:#f2efe7;width:min(1240px,96vw);max-height:90vh;padding:20px;box-shadow:0 15px 65px #000b;font:14px system-ui,sans-serif}
+#btOverviewDialog::backdrop{background:#03080ed9}#btOverviewDialog *{box-sizing:border-box}
+#btOverviewDialog .ov-head{display:flex;justify-content:space-between;align-items:start;gap:16px;border-bottom:1px solid #435164;padding-bottom:12px}
+#btOverviewDialog h3{margin:0;color:#e8c174;font-size:23px}#btOverviewDialog .ov-meta{color:#aac3d8;font-size:12px;margin-top:5px}
+#btOverviewDialog button{width:auto;min-width:0;padding:9px 15px;cursor:pointer;border-radius:7px;border:1px solid #9d7b3d;background:#172637;color:#f2e9d5;font:inherit}
+#btOverviewDialog button:focus-visible,#btOverviewDialog input:focus-visible,#btOverviewDialog select:focus-visible{outline:2px solid #e8c174;outline-offset:2px}
+#btOverviewDialog .ov-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:16px 0}
+#btOverviewDialog .ov-stat{padding:12px;border:1px solid #304458;border-radius:8px}#btOverviewDialog .ov-stat span{display:block;color:#aac3d8;font-size:11px}#btOverviewDialog .ov-stat strong{display:block;font-size:21px;margin-top:4px}
+#btOverviewDialog .ov-filters{display:flex;gap:9px;flex-wrap:wrap;margin-bottom:12px}#btOverviewDialog input,#btOverviewDialog select{background:#101f2d;border:1px solid #50627a;border-radius:7px;color:#f2efe7;padding:10px;font:inherit;min-width:0}#btOverviewDialog input{flex:1 1 210px}#btOverviewDialog select{flex:1 1 170px}
+#btOverviewDialog .ov-scroll{max-height:50vh;overflow:auto;border:1px solid #33485b;border-radius:8px}#btOverviewDialog table{border-collapse:collapse;min-width:1260px;width:100%;font-size:12px}#btOverviewDialog th,#btOverviewDialog td{padding:10px;border-bottom:1px solid #304458;text-align:left;white-space:nowrap}#btOverviewDialog th{position:sticky;top:0;background:#152838;color:#e8c174;z-index:1}#btOverviewDialog td small{display:block;color:#a6b8c9}#btOverviewDialog .ov-progress{font-size:11px;color:#c9d8e6}#btOverviewDialog .ov-progress b{display:block}#btOverviewDialog .ov-bar{height:4px;background:#304154;border-radius:5px;margin-top:4px;width:130px;overflow:hidden}#btOverviewDialog .ov-bar i{display:block;height:100%;background:#d4a545}#btOverviewDialog .ov-message{color:#aac3d8;margin:12px 0}
+@media(max-width:650px){#btOverviewDialog{padding:12px}#btOverviewDialog .ov-stats{grid-template-columns:repeat(2,minmax(0,1fr))}#btOverviewDialog h3{font-size:18px}}
+</style>
+<dialog id="btOverviewDialog" aria-labelledby="btOverviewTitle">
+ <div class="ov-head"><div><h3 id="btOverviewTitle">Current KvK Overview</h3><div class="ov-meta" id="btOverviewMeta"></div></div><button type="button" id="btOverviewClose" aria-label="Close overview">CLOSE ✕</button></div>
+ <p class="ov-message" id="btOverviewMessage" role="status">Select a KvK to view its Governors.</p>
+ <div id="btOverviewContent" hidden>
+  <div class="ov-stats"><div class="ov-stat"><span>GOVERNORS</span><strong id="ovTotal">—</strong></div><div class="ov-stat"><span>REQUIREMENT MET</span><strong id="ovMet">—</strong></div><div class="ov-stat"><span id="ovProgressLabel">IN PROGRESS</span><strong id="ovProgress">—</strong></div><div class="ov-stat"><span>AVERAGE PROGRESS</span><strong id="ovAverage">—</strong></div></div>
+  <div class="ov-filters"><input id="ovSearch" type="search" placeholder="Search Governor or ID" aria-label="Search Governor or ID"/><select id="ovStatus" aria-label="Filter by status"><option value="ALL">ALL STATUS</option></select><select id="ovSort" aria-label="Sort Governors"><option value="overall-asc">Progress: lowest first</option><option value="overall-desc">Progress: highest first</option><option value="dkp-desc">DKP: highest first</option><option value="deads-desc">Deads: highest first</option><option value="kills-desc">Kills: highest first</option><option value="power-desc">Start Power: highest first</option></select></div>
+  <p class="ov-meta" id="ovShown" aria-live="polite"></p>
+  <div class="ov-scroll" tabindex="0" role="region" aria-label="Governor overview table"><table><thead><tr><th>Governor</th><th>Start Power</th><th>KP</th><th>Kills</th><th>Deads</th><th>DKP</th><th>KPR</th><th>Kills Requirement</th><th>Deads Requirement</th><th>Overall</th><th>Status</th></tr></thead><tbody id="ovRows"></tbody></table></div>
+ </div>
+</dialog>
+<script>
+(()=>{'use strict';
+ const $=id=>document.getElementById(id),dlg=$('btOverviewDialog');let current=null,requestNo=0;
+ const n=v=>{const x=Number(v);return Number.isFinite(x)?x:0},fmt=v=>v===null||v===undefined||v===''?'—':n(v).toLocaleString('en-US');
+ const pct=v=>v===null||v===undefined||v===''?'—':n(v).toFixed(0)+'%';
+ function group(r,historical){const s=String(r.requirementStatus||'').toUpperCase().replace(/\s+/g,'_');if(['PASS','MET','REQUIREMENT_MET'].includes(s))return 'MET';if(historical)return 'NOT_MET';if(['NOT_MET','FAIL','FAILED'].includes(s))return 'NOT_MET';return 'IN_PROGRESS'}
+ function render(){if(!current)return;const historical=current.kvk.comparisonMode==='START_END',q=$('ovSearch').value.trim().toLowerCase(),status=$('ovStatus').value,sort=$('ovSort').value;
+  const rows=current.rows.filter(r=>(!q||String(r.governorName||'').toLowerCase().includes(q)||String(r.governorId||'').toLowerCase().includes(q))&&(status==='ALL'||group(r,historical)===status));
+  rows.sort((a,b)=>sort==='overall-desc'?n(b.overallProgress)-n(a.overallProgress):sort==='dkp-desc'?n(b.dkp)-n(a.dkp):sort==='deads-desc'?n(b.deads)-n(a.deads):sort==='kills-desc'?n(b.kills)-n(a.kills):sort==='power-desc'?n(b.startPower)-n(a.startPower):n(a.overallProgress)-n(b.overallProgress));
+  const fragment=document.createDocumentFragment();for(const r of rows){const tr=document.createElement('tr');const g=group(r,historical);const label=g==='MET'?'MET':g==='NOT_MET'?'NOT MET':'IN PROGRESS';
+   const cells=[[r.governorName,r.governorId],fmt(r.startPower),fmt(r.killPoints),fmt(r.kills),fmt(r.deads),fmt(r.dkp),(n(r.kpr)*100).toFixed(2)+'%',null,null,pct(r.overallProgress),label];
+   cells.forEach((value,i)=>{const td=document.createElement('td');if(i===0){const strong=document.createElement('strong');strong.textContent=value[0]||'—';const small=document.createElement('small');small.textContent=value[1]||'';td.append(strong,small)}else if(i===7||i===8){const val=i===7?r.kills:r.deads,target=i===7?r.killRequirement:r.deadRequirement,progress=i===7?r.killProgress:r.deadProgress;const wrapper=document.createElement('div');wrapper.className='ov-progress';const text=document.createElement('span');text.textContent=fmt(val)+' / '+fmt(target);const bold=document.createElement('b');bold.textContent=pct(progress);const bar=document.createElement('div');bar.className='ov-bar';const fill=document.createElement('i');fill.style.width=Math.min(100,Math.max(0,n(progress)))+'%';bar.append(fill);wrapper.append(text,bold,bar);td.append(wrapper)}else td.textContent=value;tr.append(td)});fragment.append(tr)}$('ovRows').replaceChildren(fragment);$('ovShown').textContent=rows.length+' of '+current.rows.length+' Governors shown.';
+ }
+ function stats(data){const historical=data.kvk.comparisonMode==='START_END',rows=data.rows,met=rows.filter(r=>group(r,historical)==='MET').length,notMet=rows.filter(r=>group(r,historical)===(historical?'NOT_MET':'IN_PROGRESS')).length,vals=rows.map(r=>Number(r.overallProgress)).filter(Number.isFinite),avg=vals.length?vals.reduce((a,b)=>a+b,0)/vals.length:0;
+  $('btOverviewTitle').textContent='KvK '+data.kvk.number+' · '+(data.kvk.seasonName||data.kvk.id);$('btOverviewMeta').textContent=(data.kvk.status||'—')+' · '+(historical?'START → END':'START → LATEST')+' · '+(data.kvk.startDate||'—')+' → '+(historical?(data.kvk.endDate||'END'):'LATEST');$('ovTotal').textContent=fmt(rows.length);$('ovMet').textContent=fmt(met);$('ovProgressLabel').textContent=historical?'REQUIREMENT NOT MET':'IN PROGRESS';$('ovProgress').textContent=fmt(notMet);$('ovAverage').textContent=avg.toFixed(1)+'%';$('ovStatus').replaceChildren(...[['ALL','ALL STATUS'],['MET','REQUIREMENT MET'],[historical?'NOT_MET':'IN_PROGRESS',historical?'REQUIREMENT NOT MET':'IN PROGRESS']].map(([v,t])=>{const o=document.createElement('option');o.value=v;o.textContent=t;return o}));$('ovSearch').value='';$('ovSort').value='overall-asc';render();
+ }
+ $('openKvkOverview').addEventListener('click',async()=>{const id=$('kvkSelect').value;if(!id)return;const ticket=++requestNo;current=null;$('btOverviewContent').hidden=true;$('btOverviewMessage').textContent='Loading '+id+'…';dlg.showModal();try{const response=await fetch('/api/v1/leadership/comparisons/'+encodeURIComponent(id),{credentials:'same-origin',cache:'no-store'});const payload=await response.json();if(ticket!==requestNo||!dlg.open)return;if(!response.ok||!payload.ok||!payload.data?.ok)throw Error(payload.message||payload.data?.message||'HTTP '+response.status);const data=payload.data;if(data.kvk?.id!==id||!Array.isArray(data.rows)||data.total!==data.rows.length)throw Error('Overview response validation failed.');current=data;stats(data);$('btOverviewContent').hidden=false;$('btOverviewMessage').textContent='Read-only overview · '+data.total+' Governors.'}catch(error){if(ticket===requestNo&&dlg.open)$('btOverviewMessage').textContent='Overview unavailable: '+error.message}});
+ $('btOverviewClose').addEventListener('click',()=>dlg.close());dlg.addEventListener('close',()=>{requestNo++;current=null});['ovSearch','ovStatus','ovSort'].forEach(id=>$(id).addEventListener(id==='ovSearch'?'input':'change',render));
 })();
 </script></body></html>
