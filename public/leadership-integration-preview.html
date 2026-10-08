@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en"><head><meta charset="utf-8"/><meta content="width=device-width,initial-scale=1" name="viewport"/><title>BattleTrack | Leadership Native Integration Preview</title><link href="/battletrack.css" rel="stylesheet"/><style>
+<html lang="en"><head><meta charset="utf-8"/><meta content="width=device-width,initial-scale=1" name="viewport"/><title>BattleTrack | Leadership Feature Preservation Preview</title><link href="/battletrack.css" rel="stylesheet"/><style>
 body{background:#0d101b;color:#eee;font-family:system-ui,sans-serif}
 .page-shell{max-width:1250px;margin:auto;padding:30px 18px}
 .admin-command-panel{display:block}
@@ -14,6 +14,7 @@ body{background:#0d101b;color:#eee;font-family:system-ui,sans-serif}
 .native-kvk-data .next-kvk{border-top:1px solid #33465a;margin-top:9px;padding-top:9px;font-size:12px}
 .native-kvk-data .next-kvk strong{color:#e4bf69}
 .admin-module-card button:disabled{opacity:.45;cursor:not-allowed}
+.native-selection-context{font-size:12px;color:#d7b86a;margin-top:12px;line-height:1.5}
 @media(max-width:650px){.native-kvk-data .native-kvk-grid{grid-template-columns:1fr}}
 </style></head><body><main class="page-shell"><section class="panel admin-command-panel" id="adminPanel">
 <div class="admin-command-head">
@@ -44,13 +45,13 @@ body{background:#0d101b;color:#eee;font-family:system-ui,sans-serif}
 <h4>Current KvK Overview</h4>
 <p>Leadership view for Governor performance, Requirements and current progress.</p>
 <button disabled="" title="Disabled in read-only integration review" type="button">OPEN KVK OVERVIEW</button>
-<small>Available when scan data exists for the selected KvK</small>
+<small>Available when scan data exists for the selected KvK</small><p class="native-selection-context" id="overviewContext" aria-live="polite">Selected KvK: loading…</p>
 </article>
 <article class="admin-module-card">
 <h4>Comparison &amp; Export</h4>
 <p>Select any tracked KvK as the source for Leadership comparison and future exports.</p>
 <button disabled="" title="Disabled in read-only integration review" type="button">SELECT KVK</button>
-<small>Historical: START → END · Active: START → LATEST</small>
+<small>Historical: START → END · Active: START → LATEST</small><p class="native-selection-context" id="comparisonContext" aria-live="polite">Comparison source: loading…</p>
 </article>
 </div>
 </section></main><script>
@@ -65,8 +66,8 @@ body{background:#0d101b;color:#eee;font-family:system-ui,sans-serif}
   const data=result.data, list=data.kvks, select=document.getElementById('kvkSelect');
   const set=(id,value)=>document.getElementById(id).textContent=value??'—';
   for(const kvk of list){const option=document.createElement('option');option.value=kvk.id;option.textContent='KvK '+kvk.number+' · '+kvk.seasonName;select.append(option)}
-  function render(){const kvk=list.find(x=>x.id===select.value);if(!kvk)return;set('selectedId',kvk.id);set('selectedStory',kvk.seasonName);set('selectedStart',kvk.startDate);set('selectedEnd',kvk.endDate);set('selectedStatus',kvk.status)}
+  function render(){const kvk=list.find(x=>x.id===select.value);if(!kvk)return;set('selectedId',kvk.id);set('selectedStory',kvk.seasonName);set('selectedStart',kvk.startDate);set('selectedEnd',kvk.endDate);set('selectedStatus',kvk.status);set('overviewContext','Selected KvK: '+kvk.id+' · '+kvk.seasonName+' (read-only context; overview action disabled)');set('comparisonContext','Comparison source: '+kvk.id+' · '+(kvk.status==='Historical'?'START → END':'START → LATEST')+' (export action disabled)')}
   select.addEventListener('change',render);set('nextId',data.nextKvkId);set('count',list.length+' tracked KvKs · '+(data.stories?.length??0)+' story variants · no changes saved');render();content.hidden=false;status.textContent='Signed KvK data loaded successfully. Read-only.';
- }catch(error){status.textContent=error.message+' No KvK data displayed.'}
+ }catch(error){status.textContent=error.message+' No KvK data displayed.';document.getElementById('overviewContext').textContent='No authorized KvK context available.';document.getElementById('comparisonContext').textContent='No authorized KvK context available.'}
 })();
 </script></body></html>
