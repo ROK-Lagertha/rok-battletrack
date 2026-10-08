@@ -38,7 +38,7 @@ body{background:#0d101b;color:#eee;font-family:system-ui,sans-serif}
 <article class="admin-module-card">
 <h4>Kingdom Scan</h4>
 <p>Select a Kingdom scan and validate it locally before any future import into BattleTrack.</p>
-<button disabled="" title="Disabled in read-only integration review" type="button">UPLOAD KINGDOM SCAN</button>
+<button id="openScanPreview" type="button">UPLOAD KINGDOM SCAN</button>
 <small>Preview only · no database or Drive changes</small>
 </article>
 <article class="admin-module-card">
@@ -151,4 +151,36 @@ body{background:#0d101b;color:#eee;font-family:system-ui,sans-serif}
  $('openKvkOverview').addEventListener('click',async()=>{const id=$('kvkSelect').value;if(!id)return;const ticket=++requestNo;current=null;$('btOverviewContent').hidden=true;$('btOverviewMessage').textContent='Loading '+id+'…';dlg.showModal();try{const response=await fetch('/api/v1/leadership/comparisons/'+encodeURIComponent(id),{credentials:'same-origin',cache:'no-store'});const payload=await response.json();if(ticket!==requestNo||!dlg.open)return;if(!response.ok||!payload.ok||!payload.data?.ok)throw Error(payload.message||payload.data?.message||'HTTP '+response.status);const data=payload.data;if(data.kvk?.id!==id||!Array.isArray(data.rows)||data.total!==data.rows.length)throw Error('Overview response validation failed.');current=data;stats(data);$('btOverviewContent').hidden=false;$('btOverviewMessage').textContent='Read-only overview · '+data.total+' Governors.'}catch(error){if(ticket===requestNo&&dlg.open)$('btOverviewMessage').textContent='Overview unavailable: '+error.message}});
  $('btOverviewClose').addEventListener('click',()=>dlg.close());dlg.addEventListener('close',()=>{requestNo++;current=null});['ovSearch','ovStatus','ovSort'].forEach(id=>$(id).addEventListener(id==='ovSearch'?'input':'change',render));
 })();
-</script></body></html>
+</script>
+<style>
+#btScanDialog{border:1px solid #977337;border-radius:12px;background:#0c1925;color:#f2efe7;width:min(760px,95vw);max-height:90vh;overflow:auto;padding:22px;font:14px system-ui,sans-serif}
+#btScanDialog::backdrop{background:#03080ed9}#btScanDialog *{box-sizing:border-box}
+#btScanDialog h3{color:#eab85c;margin:0 0 8px}#btScanDialog p{color:#b5c8d8}#btScanDialog label{display:block;margin:15px 0 5px;color:#e9c46e;font-weight:600}
+#btScanDialog select,#btScanDialog input{width:100%;padding:11px;background:#102131;color:#fff;border:1px solid #596979;border-radius:7px}
+#btScanDialog .scan-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:20px}#btScanDialog button{width:auto!important;min-width:120px}
+#btScanDialog .scan-report{margin-top:18px;border:1px solid #33465a;padding:12px;border-radius:8px;white-space:pre-wrap;line-height:1.65}
+</style>
+<dialog id="btScanDialog" aria-label="Kingdom Scan local preview">
+<h3>Kingdom Scan · Local Preview</h3>
+<p>Choose an XLSX file and review its basic file metadata and target assignment. This stage does not parse Governor rows or import data.</p>
+<label for="btScanFile">Kingdom scan (.xlsx)</label><input id="btScanFile" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
+<label for="btScanKvk">Target KvK (read-only assignment)</label><select id="btScanKvk"></select>
+<label for="btScanSnapshot">Snapshot type</label><select id="btScanSnapshot"><option value="">Choose snapshot</option><option value="START">START</option><option value="LATEST">LATEST</option><option value="END">END</option></select>
+<div id="btScanReport" class="scan-report" role="status">No file selected. Nothing has been uploaded or saved.</div>
+<div class="scan-actions"><button type="button" id="btScanClose">CLOSE</button></div>
+</dialog>
+<script>
+(()=>{'use strict';
+const dlg=document.getElementById('btScanDialog'),file=document.getElementById('btScanFile'),kvk=document.getElementById('btScanKvk'),snap=document.getElementById('btScanSnapshot'),report=document.getElementById('btScanReport');
+const display=()=>{const f=file.files?.[0],target=kvk.value,kind=snap.value;
+if(!f){report.textContent='No file selected. Nothing has been uploaded or saved.';return;}
+const ext=/\.xlsx$/i.test(f.name),size=f.size<=25*1024*1024&&f.size>0;
+report.textContent='File: '+f.name+'\nSize: '+f.size.toLocaleString()+' bytes\nTarget KvK: '+(target||'Not selected')+'\nSnapshot: '+(kind||'Not selected')+'\nExtension: '+(ext?'OK':'INVALID')+'\nSize limit (25 MB): '+(size?'OK':'INVALID')+'\n\nLOCAL PREVIEW ONLY · No file upload, import, archive or database write.\nGovernor-row parsing and content validation will follow in CF-017.2.';
+};
+document.getElementById('openScanPreview').addEventListener('click',()=>{
+const source=document.getElementById('kvkSelect');kvk.replaceChildren();for(const opt of source.options){const o=document.createElement('option');o.value=opt.value;o.textContent=opt.textContent;kvk.append(o)}kvk.value=source.value;display();dlg.showModal();});
+document.getElementById('btScanClose').addEventListener('click',()=>dlg.close());
+for(const e of [file,kvk,snap])e.addEventListener('change',display);
+})();
+</script>
+</body></html>
