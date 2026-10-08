@@ -225,23 +225,31 @@ rows.push(values);if(rows.length>150000)throw Error('Too many worksheet rows');
 return rows;
 }
 function validate(rows){
-const aliases=[/^(governor\s*id|governorid|player\s*id|playerid|user\s*id|user_id|id)$/i,/^(governor|governor\s*name|player|player\s*name|name|nickname)$/i];
-let header=-1,idcol=-1,namecol=-1;
+const required=['Kingdom','Governor Name','Governor ID','Power','Deads','Kill Points','T1 Kills','T2 Kills','T3 Kills','T4 Kills','T5 Kills'];
+const normalize=s=>String(s??'').trim().toLowerCase().replace(/\s+/g,' ');
+let header=-1,columns={};
 for(let i=0;i<Math.min(35,rows.length);i++){
-const pairs=Object.entries(rows[i]).map(([k,v])=>[Number(k),String(v).trim()]);
-const ids=pairs.filter(([k,v])=>aliases[0].test(v));const names=pairs.filter(([k,v])=>aliases[1].test(v));
-if(ids.length){header=i;idcol=ids[0][0];namecol=names[0]?.[0]??-1;break}
+ const found={};for(const [index,value] of Object.entries(rows[i]))found[normalize(value)]=Number(index);
+ if(required.every(name=>found[normalize(name)]!==undefined)){
+  header=i;columns=Object.fromEntries(required.map(name=>[name,found[normalize(name)]]));break;
+ }
 }
-if(header<0) return {ok:false,message:'Governor ID column not detected. Check the original scan template; no rows have been imported.',total:rows.length};
-const seen=new Set(),duplicates=[],invalid=[],samples=[];let count=0;
+if(header<0)return {ok:false,message:'Required columns missing on worksheet 3903: '+required.join(', '),total:rows.length};
+const seen=new Set(),duplicates=[],invalid=[],samples=[];let count=0,duplicateCount=0,invalidCount=0;
+const numeric=['Power','Deads','Kill Points','T1 Kills','T2 Kills','T3 Kills','T4 Kills','T5 Kills'];
 for(let i=header+1;i<rows.length;i++){
-const r=rows[i],id=String(r[idcol]??'').trim(),name=namecol<0?'':String(r[namecol]??'').trim();
-if(!id&&!name)continue;count++;
-if(!/^\d{6,15}$/.test(id)){if(invalid.length<8)invalid.push('Row '+(i+1)+': '+(id||'(empty)'));continue}
-if(seen.has(id)){if(duplicates.length<8)duplicates.push('Row '+(i+1)+': '+id)}else seen.add(id);
-if(samples.length<5)samples.push(id+(name?' · '+name:''));
+ const r=rows[i],id=String(r[columns['Governor ID']]??'').trim(),name=String(r[columns['Governor Name']]??'').trim();
+ if(!id&&!name)continue;count++;
+ let problem='';
+ if(!/^\d{6,15}$/.test(id))problem='Invalid Governor ID';
+ else if(!name)problem='Missing Governor Name';
+ else if(String(r[columns['Kingdom']]??'').trim()!=='3903')problem='Kingdom is not 3903';
+ else for(const field of numeric){const value=String(r[columns[field]]??'').trim();if(!/^\d+$/.test(value)||!Number.isSafeInteger(Number(value))){problem='Invalid '+field;break}}
+ if(problem){invalidCount++;if(invalid.length<8)invalid.push('Row '+(i+1)+': '+problem+' ('+(id||'empty')+')');}
+ if(/^\d{6,15}$/.test(id)){if(seen.has(id)){duplicateCount++;if(duplicates.length<8)duplicates.push('Row '+(i+1)+': '+id)}else seen.add(id)}
+ if(samples.length<5)samples.push(id+(name?' · '+name:''));
 }
-return {ok:invalid.length===0&&duplicates.length===0,count,unique:seen.size,invalid,duplicates,samples,header:header+1};
+return {ok:invalidCount===0&&duplicateCount===0,count,unique:seen.size,invalid,duplicates,invalidCount,duplicateCount,samples,header:header+1,columns:required.length};
 }
 async function display(){
 const ticket=++run,f=file.files?.[0],target=kvk.value,kind=snap.value;
@@ -262,21 +270,18 @@ const workbook=xml(entries.get('xl/workbook.xml')||'');
 const sheets=Array.from(workbook.getElementsByTagName('*')).filter(n=>n.localName==='sheet');
 const rels=xml(entries.get('xl/_rels/workbook.xml.rels')||'');
 const relations=new Map(Array.from(rels.getElementsByTagName('*')).filter(n=>n.localName==='Relationship').map(r=>[r.getAttribute('Id'),r.getAttribute('Target')]));
-let reports=[];
-for(const s of sheets.slice(0,12)){
+const s=sheets.find(item=>item.getAttribute('name')==='3903');
+if(!s)throw Error('Required worksheet "3903" is missing. Other sheets are never used.');
 const rel=s.getAttribute('r:id')||Array.from(s.attributes).find(a=>a.localName==='id')?.value;
 let path=relations.get(rel)||'';
 path=path.startsWith('/')?path.slice(1):path.startsWith('xl/')?path:'xl/'+path;
 const parts=[];for(const p of path.split('/')){if(p==='..')parts.pop();else if(p!=='.')parts.push(p)}path=parts.join('/');
-if(!entries.has(path))continue;
-reports.push({sheet:s.getAttribute('name')||'Sheet',result:validate(parseSheet(entries.get(path),strings))});
-}
+if(!entries.has(path))throw Error('Worksheet "3903" could not be read. No other worksheet will be used.');
+const v=validate(parseSheet(entries.get(path),strings));
 if(ticket!==run)return;
-if(!reports.length)throw Error('No readable worksheet found');
-const chosen=reports.find(r=>r.result.header)||reports[0],v=chosen.result;
-validation.textContent='LOCAL XLSX CONTENT CHECK\nWorksheet: '+chosen.sheet+'\n'+(v.header?'Header row: '+v.header+'\nGovernor rows: '+v.count+'\nUnique IDs: '+v.unique+'\nDuplicate IDs (sample): '+(v.duplicates.join('; ')||'None')+'\nInvalid IDs (sample): '+(v.invalid.join('; ')||'None')+'\nSample governors: '+(v.samples.join('; ')||'None')+'\n':'')+
-(v.ok?'Basic ID checks passed.':'REVIEW REQUIRED: '+(v.message||'Possible invalid or duplicate Governor IDs.'))+
-'\n\nThis is a preliminary local preview, NOT import approval. Closed KvKs are NOT yet enforced. No data saved.';
+validation.textContent='LOCAL XLSX CONTENT CHECK\nWorksheet: 3903 (required)\n'+(v.header?'Header row: '+v.header+'\nRequired columns: '+v.columns+'\nGovernor rows: '+v.count+'\nUnique IDs: '+v.unique+'\nDuplicate IDs: '+v.duplicateCount+' (samples: '+(v.duplicates.join('; ')||'None')+')\nInvalid rows: '+v.invalidCount+' (samples: '+(v.invalid.join('; ')||'None')+')\nSample governors: '+(v.samples.join('; ')||'None')+'\n':'')+
+(v.ok?'Required columns, IDs and numeric fields passed basic checks.':'REVIEW REQUIRED: '+(v.message||'Invalid or duplicate Governor data.'))+
+'\n\nLOCAL PREVIEW ONLY. Not import approval. Closed KvK write locks are not implemented yet. No data saved.';
 }catch(e){if(ticket===run)validation.textContent='Unable to inspect XLSX: '+e.message+'\nNo data uploaded or saved.'}
 }
 
