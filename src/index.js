@@ -152,8 +152,25 @@ export default {
           }
           return new Response(`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>BattleTrack · Leadership access</title><body style="background:#0a1421;color:#f1f5f9;font:16px system-ui;max-width:760px;margin:8vh auto;padding:24px"><h1 style="color:#f3c36b">Leadership authorization needs attention</h1><p>Discord sign-in completed, but your Officer + Data roles could not be verified for this session. The application has stopped automatic redirects to avoid a login loop.</p><p>Use the button below to clear only the BattleTrack session and try again.</p><form method="post" action="/api/auth/discord/logout"><button style="padding:12px 20px;border:1px solid #f3c36b;border-radius:8px;background:#142333;color:#f3c36b">Reset BattleTrack session</button></form></body></html>`,{status:403,headers:{'content-type':'text/html; charset=utf-8','cache-control':'no-store'}});
         }
-        const assetUrl = new URL("/leadership.html", request.url);
-        const response = await env.ASSETS.fetch(new Request(assetUrl, request));
+        // Cloudflare Workers static assets canonicalize /leadership.html to
+        // /leadership with HTTP 307. Fetch the canonical asset URL instead:
+        // ASSETS.fetch is a binding call, so it does not re-enter this Worker.
+        const assetUrl = new URL("/leadership", request.url);
+        const assetRequest = new Request(assetUrl, {
+          method: request.method,
+          headers: { accept: "text/html" },
+          redirect: "manual",
+        });
+        const response = await env.ASSETS.fetch(assetRequest);
+        // Never pass a static-assets redirect back to the browser: that would
+        // send /leadership back to itself and cause ERR_TOO_MANY_REDIRECTS.
+        if (response.status >= 300 && response.status < 400) {
+          console.error("Leadership asset unexpectedly redirected", response.status, response.headers.get("location"));
+          return apiError(502, "LEADERSHIP_ASSET_REDIRECT", "Leadership asset returned an unexpected redirect.");
+        }
+        if (!response.ok) {
+          return apiError(502, "LEADERSHIP_ASSET_UNAVAILABLE", "Leadership asset could not be loaded.");
+        }
         const headers = new Headers(response.headers);
         headers.set("cache-control", "private, no-store");
         headers.set("x-content-type-options", "nosniff");
