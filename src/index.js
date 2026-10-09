@@ -138,6 +138,16 @@ export default {
           // must not trigger another login, otherwise callback -> leadership
           // -> login -> callback can loop indefinitely.
           if (check.status === 401) {
+            // After OAuth callback, a missing/invalid session must be visible,
+            // not trigger an endless callback -> leadership -> login cycle.
+            if (url.searchParams.get("discord_return") === "1") {
+              const cookieHeader = request.headers.get("cookie") || "";
+              const sessionCookieReceived = /(?:^|;\s*)__Host-bt_discord=/.test(cookieHeader);
+              const diagnostic = sessionCookieReceived
+                ? "The session cookie reached BattleTrack, but its contents could not be validated (invalid or expired session)."
+                : "The browser did not send the BattleTrack session cookie with this request.";
+              return new Response(`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>BattleTrack · Session diagnostic</title><body style="background:#0a1421;color:#f1f5f9;font:16px system-ui;max-width:760px;margin:8vh auto;padding:24px"><h1 style="color:#f3c36b">Discord login completed — session not recognized</h1><p>${diagnostic}</p><p>Automatic login redirects have been stopped to protect against a redirect loop. No KvK data or permissions were changed.</p><p style="color:#a8bfd0">Diagnostic code: ${sessionCookieReceived ? "SESSION_VALIDATION_FAILED" : "SESSION_COOKIE_NOT_RECEIVED"}</p><a style="color:#f3c36b" href="/api/auth/discord/login">Retry Discord login</a></body></html>`, {status:401,headers:{"content-type":"text/html; charset=utf-8","cache-control":"no-store","x-content-type-options":"nosniff"}});
+            }
             return Response.redirect(new URL("/api/auth/discord/login", request.url), 302);
           }
           return new Response(`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>BattleTrack · Leadership access</title><body style="background:#0a1421;color:#f1f5f9;font:16px system-ui;max-width:760px;margin:8vh auto;padding:24px"><h1 style="color:#f3c36b">Leadership authorization needs attention</h1><p>Discord sign-in completed, but your Officer + Data roles could not be verified for this session. The application has stopped automatic redirects to avoid a login loop.</p><p>Use the button below to clear only the BattleTrack session and try again.</p><form method="post" action="/api/auth/discord/logout"><button style="padding:12px 20px;border:1px solid #f3c36b;border-radius:8px;background:#142333;color:#f3c36b">Reset BattleTrack session</button></form></body></html>`,{status:403,headers:{'content-type':'text/html; charset=utf-8','cache-control':'no-store'}});

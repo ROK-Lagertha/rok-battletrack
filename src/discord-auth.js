@@ -73,7 +73,9 @@ export async function discordAuth(request,env,path){
     if(!member?.allowed){const denied=accessDenied(member,env);const h=new Headers(denied.headers);h.append('set-cookie',clear(STATE));return new Response(denied.body,{status:403,headers:h});}
     const expires=Math.min(Date.now()+60*60*1000,Date.now()+Math.max(0,(tokens.expires_in||3600)-60)*1000);
     const session=await seal(env,{token:tokens.access_token,userId:member.user.id,exp:expires});
-    const headers=new Headers({location:'/leadership','cache-control':'no-store'});
+    // A one-time return marker prevents a failed cookie round-trip from silently
+    // restarting OAuth forever. No token or secret is included in the URL.
+    const headers=new Headers({location:'/leadership?discord_return=1','cache-control':'no-store'});
     headers.append('set-cookie',cookie(COOKIE,session,3600));headers.append('set-cookie',clear(STATE));
     return new Response(null,{status:302,headers});
   }
