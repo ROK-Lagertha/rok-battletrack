@@ -203,6 +203,38 @@ export default {
       }
     }
 
+    // CF-013.7: deploy-safe readiness contract for the future KvK write bridge.
+    // This endpoint NEVER calls Apps Script and NEVER changes production data.
+    if (url.pathname === "/api/v1/leadership/kvks/write-readiness") {
+      if (request.method !== "GET") return apiError(405, "METHOD_NOT_ALLOWED", "GET required.");
+      try {
+        const sessionCheck = new Request(new URL("/api/auth/discord/me", request.url), {
+          method: "GET", headers: { cookie: request.headers.get("cookie") || "" }
+        });
+        const auth = await discordAuth(sessionCheck, env, "/api/auth/discord/me");
+        if (!auth.ok) return apiError(auth.status === 401 ? 401 : 403, "LEADERSHIP_ACCESS_DENIED", "Discord Officer and Data roles are required.");
+        return json({
+          ok: true,
+          stage: "CF-013.7",
+          mode: "READ_ONLY",
+          writesEnabled: false,
+          createEnabled: false,
+          closeEnabled: false,
+          productionWritesAllowed: false,
+          nextSteps: [
+            "Configure an isolated test spreadsheet and separate Apps Script deployment",
+            "Implement a dedicated signed write protocol with server-side authorization",
+            "Persist idempotency and audit records under an Apps Script lock",
+            "Test synthetic Create and Close against test data only",
+            "Require explicit production activation approval"
+          ]
+        });
+      } catch (error) {
+        console.error("KvK write readiness auth failed", error);
+        return apiError(503, "READINESS_UNAVAILABLE", "Write readiness temporarily unavailable.");
+      }
+    }
+
     // CF-013.5.1: authenticated, read-only preflight validation.
     // IMPORTANT: no create/close route is enabled and no upstream write is called.
     if (url.pathname === "/api/v1/leadership/kvks/validate-create" ||
