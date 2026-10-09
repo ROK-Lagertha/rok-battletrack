@@ -350,6 +350,7 @@ for(const e of [file,kvk,snap])e.addEventListener('change',display);
 .bt-leadership-dialog .bt-dlg-primary{width:100%;background:linear-gradient(#ffe18a,#d9950c);color:#080d13;font-weight:800;border:1px solid #ffe09b;border-radius:9px;padding:13px;margin-top:15px;cursor:pointer}
 .bt-leadership-dialog .bt-dlg-primary:disabled{opacity:.45;cursor:not-allowed}
 .bt-leadership-dialog .bt-dlg-footer{border:1px solid #1e5649;border-radius:8px;padding:10px;margin-top:12px;color:#7fdbba;font-size:11px}
+.bt-leadership-dialog .bt-validation-message{margin:12px 0 0;padding:10px;border:1px solid #31475b;border-radius:8px;background:#0a1b29;color:#c1d3e0;font-size:12px}.bt-leadership-dialog .bt-validation-message[data-state="ok"]{border-color:#246b57;color:#88e4c4}.bt-leadership-dialog .bt-validation-message[data-state="error"]{border-color:#93534b;color:#ffc0b4}
 @media(max-width:600px){.bt-leadership-dialog .bt-dlg-grid{grid-template-columns:1fr}.bt-leadership-dialog{padding:16px}}
 </style>
 <dialog class="bt-leadership-dialog" id="btCreateKvkDialog" aria-labelledby="btCreateTitle">
@@ -359,7 +360,7 @@ for(const e of [file,kvk,snap])e.addEventListener('change',display);
  <label for="btCreateStory">KVK STORY</label><select id="btCreateStory"><option value="">Loading Story Catalog…</option></select>
  <div class="bt-dlg-grid"><div><label for="btCreateStart">KVK START</label><input type="date" id="btCreateStart"></div><div><label for="btCreateEnd">KVK END (AUTO +50 DAYS · EDITABLE)</label><input type="date" id="btCreateEnd"></div></div>
  <div class="bt-dlg-notice">SEASON NAME<br><strong id="btCreateSeason">Select a story</strong></div>
- <button class="bt-dlg-primary" type="button" disabled title="A protected creation endpoint and verified Story Catalog are required">CREATE KVK · NOT YET AVAILABLE</button>
+ <button class="bt-dlg-primary" id="btValidateCreate" type="button">VALIDATE KVK · NO WRITE</button><p id="btCreateValidation" class="bt-validation-message" role="status" aria-live="polite">Choose a story and dates to run a secure preflight check.</p><button class="bt-dlg-primary" type="button" disabled>CREATE KVK · NOT YET AVAILABLE</button>
  <div class="bt-dlg-footer">SAFE PREVIEW ONLY · No KvK created. The Story Catalog and production write endpoint must be migrated and authorized first.</div>
 </dialog>
 <dialog class="bt-leadership-dialog" id="btCloseKvkDialog" aria-labelledby="btCloseTitle">
@@ -367,7 +368,7 @@ for(const e of [file,kvk,snap])e.addEventListener('change',display);
  <p>Closing a KvK is independent of Comparison. Only active KvKs are eligible for review.</p>
  <label for="btCloseTarget">ACTIVE KVK</label><select id="btCloseTarget"></select>
  <div class="bt-dlg-notice">Closing a KvK is a permanent administrative operation. This preview does not change the database.</div>
- <button class="bt-dlg-primary" type="button" disabled>CLOSE KVK · NOT YET AVAILABLE</button>
+ <label for="btCloseResult">KVK RESULT</label><select id="btCloseResult"><option value="">SELECT RESULT</option><option value="WIN">WIN</option><option value="LOST">LOST</option><option value="MANUAL">MANUAL / EARLY END</option></select><label for="btCloseDate">ACTUAL END DATE</label><input id="btCloseDate" type="date"><button class="bt-dlg-primary" id="btValidateClose" type="button">VALIDATE CLOSURE · NO WRITE</button><p id="btCloseValidation" class="bt-validation-message" role="status" aria-live="polite">Select an active KvK, result and end date to validate.</p><button class="bt-dlg-primary" type="button" disabled>CLOSE KVK · NOT YET AVAILABLE</button>
  <div class="bt-dlg-footer">PROTECTED ACTION · Requires verified write API, confirmation and audit logging.</div>
 </dialog>
 <dialog class="bt-leadership-dialog" id="btComparisonSelectorDialog" aria-labelledby="btSelectorTitle">
@@ -385,14 +386,44 @@ const open=id=>$(id).showModal();
 for(const btn of document.querySelectorAll('[data-close]'))btn.addEventListener('click',()=>$(btn.dataset.close).close());
 for(const dlg of document.querySelectorAll('.bt-leadership-dialog'))dlg.addEventListener('click',e=>{if(e.target===dlg)dlg.close()});
 const getKvks=()=>window.BattleTrackLeadershipKvks||[];
+// CF-013.5.2: preflight-only. These buttons never call any write endpoint.
+async function runKvkPreflight(type, payload, outputId){
+ const output=$(outputId),button=$(type==='create'?'btValidateCreate':'btValidateClose');
+ output.dataset.state='';output.textContent='Validating securely…';button.disabled=true;
+ try{
+  const response=await fetch('/api/v1/leadership/kvks/validate-'+type,{
+   method:'POST',credentials:'same-origin',cache:'no-store',
+   headers:{'content-type':'application/json'},body:JSON.stringify(payload)
+  });
+  const data=await response.json();
+  if(!response.ok||!data.ok)throw Error(data.message||'Validation failed (HTTP '+response.status+').');
+  if(data.mode!=='VALIDATION_ONLY'||data.writesEnabled!==false)throw Error('Unexpected validation response. No action taken.');
+  output.dataset.state='ok';
+  output.textContent=type==='create'
+   ?'VALIDATED · '+data.kvkId+' · '+data.seasonName+' · '+data.startDate+' → '+data.endDate+' · NO DATA WRITTEN'
+   :'VALIDATED · '+data.kvkId+' · '+data.result+' · '+data.actualEndDate+' · NO DATA WRITTEN';
+ }catch(error){output.dataset.state='error';output.textContent='Not validated: '+error.message}
+ finally{button.disabled=false}
+}
+$('btValidateCreate').addEventListener('click',()=>{
+ const story=$('btCreateStory').value,startDate=$('btCreateStart').value,endDate=$('btCreateEnd').value;
+ if(!story||!startDate||!endDate){$('btCreateValidation').dataset.state='error';$('btCreateValidation').textContent='Choose a story, start date and end date first.';return}
+ runKvkPreflight('create',{story,startDate,endDate},'btCreateValidation');
+});
+$('btValidateClose').addEventListener('click',()=>{
+ const kvkId=$('btCloseTarget').value,result=$('btCloseResult').value,actualEndDate=$('btCloseDate').value;
+ if(!getKvks().some(k=>k.id===kvkId)||!result||!actualEndDate){$('btCloseValidation').dataset.state='error';$('btCloseValidation').textContent='Choose an active KvK, result and end date first.';return}
+ runKvkPreflight('close',{kvkId,result,actualEndDate},'btCloseValidation');
+});
+
 $('btCreateStory').addEventListener('change',()=>{
  const selected=$('btCreateStory').value;
  const story=(window.BattleTrackLeadershipStories||[]).find(item=>item.name===selected);
  $('btCreateSeason').textContent=story?story.name:'Select a story';
 });
-$('btAddKvk').addEventListener('click',()=>{const list=getKvks(),next=Number(window.BattleTrackLeadershipNext?.number)||Math.max(0,...list.map(x=>Number(x.number)||0))+1;$('btNextKvkNumber').textContent='KvK '+next;$('btNextKvkId').textContent=window.BattleTrackLeadershipNext?.id||'3903-KVK'+next;$('btCreateStory').value='';$('btCreateStart').value='';$('btCreateEnd').value='';$('btCreateSeason').textContent='Select a story';open('btCreateKvkDialog')});
+$('btAddKvk').addEventListener('click',()=>{const list=getKvks(),next=Number(window.BattleTrackLeadershipNext?.number)||Math.max(0,...list.map(x=>Number(x.number)||0))+1;$('btNextKvkNumber').textContent='KvK '+next;$('btNextKvkId').textContent=window.BattleTrackLeadershipNext?.id||'3903-KVK'+next;$('btCreateStory').value='';$('btCreateStart').value='';$('btCreateEnd').value='';$('btCreateSeason').textContent='Select a story';$('btCreateValidation').dataset.state='';$('btCreateValidation').textContent='Choose a story and dates to run a secure preflight check.';open('btCreateKvkDialog')});
 $('btCreateStart').addEventListener('change',()=>{const value=$('btCreateStart').value;if(!value){$('btCreateEnd').value='';return}const date=new Date(value+'T00:00:00Z');date.setUTCDate(date.getUTCDate()+50);$('btCreateEnd').value=date.toISOString().slice(0,10)});
-$('btCloseKvk').addEventListener('click',()=>{const target=$('btCloseTarget');target.replaceChildren();const active=getKvks().filter(k=>String(k.status||'').toLowerCase()!=='historical');for(const k of active){const opt=document.createElement('option');opt.value=k.id;opt.textContent='KvK '+k.number+' · '+k.seasonName+' · ACTIVE';target.append(opt)}if(!active.length){const opt=document.createElement('option');opt.textContent='No active KvK available';target.append(opt)}open('btCloseKvkDialog')});
+$('btCloseKvk').addEventListener('click',()=>{const target=$('btCloseTarget');target.replaceChildren();const active=getKvks().filter(k=>String(k.status||'').toLowerCase()!=='historical');for(const k of active){const opt=document.createElement('option');opt.value=k.id;opt.textContent='KvK '+k.number+' · '+k.seasonName+' · ACTIVE';target.append(opt)}if(!active.length){const opt=document.createElement('option');opt.textContent='No active KvK available';target.append(opt)}$('btCloseResult').value='';$('btCloseDate').value='';$('btCloseValidation').dataset.state='';$('btCloseValidation').textContent=active.length?'Select an active KvK, result and end date to validate.':'No active KvK: closure validation is unavailable.';$('btValidateClose').disabled=!active.length;open('btCloseKvkDialog')});
 $('btSelectComparisonKvk').addEventListener('click',()=>{const choice=$('btComparisonChoice');choice.replaceChildren();const empty=document.createElement('option');empty.value='';empty.textContent='SELECT KVK / SEASON';choice.append(empty);for(const k of getKvks()){const o=document.createElement('option');o.value=k.id;o.textContent='KvK '+k.number+' · '+k.seasonName+' · '+(String(k.status||'').toLowerCase()==='historical'?'HISTORICAL':'ACTIVE');choice.append(o)}choice.value=$('kvkSelect').value&&$('btComparisonActions').hidden===false?$('kvkSelect').value:'';choice.dispatchEvent(new Event('change'));open('btComparisonSelectorDialog')});
 $('btComparisonChoice').addEventListener('change',()=>{const k=getKvks().find(x=>x.id===$('btComparisonChoice').value);const historical=String(k?.status||'').toLowerCase()==='historical';$('btSelectorKvk').textContent=k?.id||'—';$('btSelectorStatus').textContent=k?(historical?'HISTORICAL':'ACTIVE'):'—';$('btSelectorMode').textContent=k?(historical?'START → END':'START → LATEST'):'—';$('btSelectorWindow').textContent=k?((k.startDate||'START')+' → '+(historical?(k.endDate||'END'):'LATEST')):'—';$('btUseComparisonChoice').disabled=!k});
 $('btUseComparisonChoice').addEventListener('click',()=>{const id=$('btComparisonChoice').value;if(!getKvks().some(k=>k.id===id))return;const k=getKvks().find(k=>k.id===id);$('kvkSelect').value=id;$('kvkSelect').dispatchEvent(new Event('change'));$('comparisonResults').hidden=true;$('comparisonRows').replaceChildren();$('exportComparison').disabled=true;$('btComparisonActions').hidden=false;$('comparisonContext').hidden=false;$('comparisonState').hidden=false;$('comparisonContext').textContent='Comparison source: '+id+' · '+(String(k.status||'').toLowerCase()==='historical'?'START → END':'START → LATEST');$('comparisonState').textContent='Ready to load comparison for '+id+'.';$('loadComparison').disabled=false;$('btComparisonSelectorDialog').close()});
