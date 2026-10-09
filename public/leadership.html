@@ -75,22 +75,25 @@ document.getElementById('btDiscordLogout').addEventListener('click', async () =>
  const fmt=v=>typeof v==='number'&&Number.isInteger(v)?v.toLocaleString('en-US'):String(v??'—');
  const percent=v=>v===null||v===undefined?'—':(Number(v)*100).toFixed(2)+'%';
  let currentComparison=null;
- const csvCell=v=>'"'+String(v??'').replace(/"/g,'""')+'"';
- function resetComparison(){currentComparison=null;byId('comparisonResults').hidden=true;byId('comparisonRows').replaceChildren();byId('exportComparison').disabled=true;byId('comparisonState').textContent='Ready to load comparison for '+byId('kvkSelect').value+'.';}
+ let comparisonRequestId=0;
+ // Prevent spreadsheet formula execution when CSV data is opened in Excel/Sheets.
+ const csvCell=v=>{const raw=String(v??'');const safe=/^[\s\u0000-\u001f]*[=+@-]/.test(raw)?"'"+raw:raw;return '"'+safe.replace(/"/g,'""')+'"'};
+ function resetComparison(){comparisonRequestId++;currentComparison=null;byId('comparisonResults').hidden=true;byId('comparisonRows').replaceChildren();byId('exportComparison').disabled=true;byId('comparisonState').textContent='Ready to load comparison for '+byId('kvkSelect').value+'.';}
  byId('loadComparison').addEventListener('click',async()=>{
   const id=byId('kvkSelect').value;if(!id)return;
-  resetComparison();byId('loadComparison').disabled=true;byId('comparisonState').textContent='Loading signed comparison for '+id+'…';
+  resetComparison();const ticket=comparisonRequestId;byId('loadComparison').disabled=true;byId('comparisonState').textContent='Loading signed comparison for '+id+'…';
   try{
    const response=await fetch('/api/v1/leadership/comparisons/'+encodeURIComponent(id),{credentials:'same-origin',cache:'no-store'});
    const payload=await response.json();if(!response.ok||!payload.ok||!payload.data?.ok)throw Error(payload.message||payload.data?.message||'HTTP '+response.status);
+   if(ticket!==comparisonRequestId||byId('kvkSelect').value!==id)return;
    const data=payload.data;
    if(data.kvk?.id!==id||!Array.isArray(data.rows)||data.total!==data.rows.length)throw Error('Comparison response validation failed.');
    const body=byId('comparisonRows');const fragment=document.createDocumentFragment();
    for(const row of data.rows){const tr=document.createElement('tr');for(const key of fields){const td=document.createElement('td');td.textContent=key==='kpr'?percent(row[key]):fmt(row[key]);tr.append(td)}fragment.append(tr)}body.append(fragment);
    currentComparison=data;byId('comparisonSummary').textContent=data.total+' Governors · '+data.kvk.comparisonMode+' · '+data.kvk.startDate+' → '+(data.kvk.endDate||'LATEST');
    byId('comparisonResults').hidden=false;byId('exportComparison').disabled=false;byId('comparisonState').textContent='Comparison loaded read-only. CSV export available.';
-  }catch(error){byId('comparisonState').textContent='Comparison unavailable: '+error.message}
-  finally{byId('loadComparison').disabled=false}
+  }catch(error){if(ticket===comparisonRequestId)byId('comparisonState').textContent='Comparison unavailable: '+error.message}
+  finally{if(ticket===comparisonRequestId)byId('loadComparison').disabled=false}
  });
  byId('exportComparison').addEventListener('click',()=>{
   if(!currentComparison||currentComparison.kvk.id!==byId('kvkSelect').value)return;
@@ -107,7 +110,7 @@ document.getElementById('btDiscordLogout').addEventListener('click', async () =>
   const data=result.data, list=data.kvks, select=document.getElementById('kvkSelect');
   const set=(id,value)=>document.getElementById(id).textContent=value??'—';
   for(const kvk of list){const option=document.createElement('option');option.value=kvk.id;option.textContent='KvK '+kvk.number+' · '+kvk.seasonName;select.append(option)}
-  function render(){const kvk=list.find(x=>x.id===select.value);if(!kvk)return;set('overviewContext','Selected KvK: '+kvk.id+' · '+kvk.seasonName+' (read-only)');set('comparisonContext','Comparison source: '+kvk.id+' · '+(kvk.status==='Historical'?'START → END':'START → LATEST'));resetComparison()}
+  function render(){byId('loadComparison').disabled=false;const kvk=list.find(x=>x.id===select.value);if(!kvk)return;set('overviewContext','Selected KvK: '+kvk.id+' · '+kvk.seasonName+' (read-only)');set('comparisonContext','Comparison source: '+kvk.id+' · '+(kvk.status==='Historical'?'START → END':'START → LATEST'));resetComparison()}
   select.addEventListener('change',render);render();byId('loadComparison').disabled=false;byId('openKvkOverview').disabled=false;content.hidden=false;status.textContent='';status.hidden=true;
  }catch(error){status.hidden=false;status.textContent=error.message+' No KvK data displayed.';document.getElementById('overviewContext').textContent='No authorized KvK context available.';document.getElementById('comparisonContext').textContent='No authorized KvK context available.'}
 })();
