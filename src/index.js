@@ -203,6 +203,64 @@ export default {
       }
     }
 
+    // CF-013.5.1: authenticated, read-only preflight validation.
+    // IMPORTANT: no create/close route is enabled and no upstream write is called.
+    if (url.pathname === "/api/v1/leadership/kvks/validate-create" ||
+        url.pathname === "/api/v1/leadership/kvks/validate-close") {
+      if (request.method !== "POST") return apiError(405, "METHOD_NOT_ALLOWED", "POST required.");
+      try {
+        const auth = await discordAuth(request, env, "/api/auth/discord/me");
+        if (!auth.ok) return apiError(auth.status === 401 ? 401 : 403, "LEADERSHIP_ACCESS_DENIED", "Discord Officer and Data roles are required.");
+        const type = url.pathname.endsWith("validate-create") ? "create" : "close";
+        if (!(request.headers.get("content-type") || "").toLowerCase().startsWith("application/json")) {
+          return apiError(415, "JSON_REQUIRED", "Content-Type application/json required.");
+        }
+        if (Number(request.headers.get("content-length") || 0) > 4096) return apiError(413, "PAYLOAD_TOO_LARGE", "Request too large.");
+        const raw = await request.text();
+        if (raw.length > 4096) return apiError(413, "PAYLOAD_TOO_LARGE", "Request too large.");
+        let payload;
+        try { payload = JSON.parse(raw); } catch { return apiError(400, "INVALID_JSON", "Invalid JSON payload."); }
+        if (!payload || typeof payload !== "object" || Array.isArray(payload)) return apiError(400, "INVALID_PAYLOAD", "Object required.");
+        const management = await leadershipManagement(env);
+        const kvks = Array.isArray(management.kvks) ? management.kvks : [];
+        const isIsoDate = value => {
+          if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+          const date = new Date(value + "T00:00:00Z");
+          return !Number.isNaN(date.valueOf()) && date.toISOString().slice(0, 10) === value;
+        };
+        if (type === "create") {
+          const story = String(payload.story || "").trim();
+          const stories = Array.isArray(management.stories) ? management.stories : [];
+          const validStory = stories.some(item => typeof item === "string" ? item === story :
+            (String(item.name || item.story || item.storyName || "").trim() === story &&
+             item.active !== false && String(item.active || "").toUpperCase() !== "FALSE"));
+          if (!validStory) return apiError(400, "INVALID_STORY", "Story must exist in the active catalog.");
+          if (!isIsoDate(payload.startDate) || !isIsoDate(payload.endDate) || payload.endDate < payload.startDate)
+            return apiError(400, "INVALID_DATE_RANGE", "Valid start and end dates are required.");
+          const nextNumber = Number(management.nextNumber);
+          const nextKvkId = String(management.nextKvkId || "");
+          if (!Number.isSafeInteger(nextNumber) || nextNumber < 1 || !/^3903-KVK[1-9]\d*$/.test(nextKvkId))
+            return apiError(503, "CATALOG_INCOMPLETE", "Next KvK metadata unavailable.");
+          if (kvks.some(item => item.id === nextKvkId)) return apiError(409, "KVK_ALREADY_EXISTS", "KvK ID already exists.");
+          return json({ok:true,mode:"VALIDATION_ONLY",writesEnabled:false,kvkId:nextKvkId,number:nextNumber,seasonName:`Season ${nextNumber} - ${story}`,startDate:payload.startDate,endDate:payload.endDate});
+        }
+        const kvkId = String(payload.kvkId || "");
+        const result = String(payload.result || "").toUpperCase();
+        if (!/^3903-KVK[1-9]\d*$/.test(kvkId) || !["WIN","LOST","MANUAL"].includes(result) || !isIsoDate(payload.actualEndDate))
+          return apiError(400, "INVALID_CLOSE_PAYLOAD", "Valid KvK ID, result and actual end date required.");
+        const kvk = kvks.find(item => item.id === kvkId);
+        if (!kvk) return apiError(404, "KVK_NOT_FOUND", "KvK does not exist.");
+        if (["historical","completed","closed"].includes(String(kvk.status || "").toLowerCase()))
+          return apiError(409, "KVK_ALREADY_CLOSED", "Historical KvKs cannot be closed again.");
+        if (kvk.startDate && payload.actualEndDate < kvk.startDate)
+          return apiError(400, "INVALID_DATE_RANGE", "End date cannot precede start date.");
+        return json({ok:true,mode:"VALIDATION_ONLY",writesEnabled:false,kvkId,result,actualEndDate:payload.actualEndDate});
+      } catch (error) {
+        console.error("KvK validation preflight failed", error);
+        return apiError(503, "KVK_VALIDATION_UNAVAILABLE", "Preflight validation temporarily unavailable.");
+      }
+    }
+
     if (url.pathname === "/api/v1/leadership/kvks") {
       if (request.method !== "GET") return apiError(405, "METHOD_NOT_ALLOWED", "GET required.");
       try {
