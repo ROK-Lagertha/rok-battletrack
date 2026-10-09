@@ -65,8 +65,7 @@ body{background:#0d101b;color:#eee;font-family:system-ui,sans-serif}
 </section></main><script>
 'use strict';
 document.getElementById('btDiscordLogout').addEventListener('click', async () => {
-  try { await fetch('/api/auth/discord/logout', { method:'GET', credentials:'same-origin', cache:'no-store' }); }
-  finally { location.replace('/api/auth/discord/login'); }
+  location.replace('/api/auth/discord/logout');
 });
 (async()=>{
  const status=document.getElementById('status'), content=document.getElementById('content');
