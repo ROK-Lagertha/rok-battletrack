@@ -31,10 +31,10 @@ body{background:#0d101b;color:#eee;font-family:system-ui,sans-serif}
 <div class="admin-module-grid">
 <article class="admin-module-card">
 <h4>KvK Management</h4>
-<p>Select the KvK for Leadership. Creating or closing KvKs remains disabled.</p>
-<div class="admin-module-actions"><button disabled="" title="Disabled in read-only integration review" type="button">ADD NEW KVK</button><button disabled="" title="Disabled in read-only integration review" type="button">CLOSE KVK</button></div>
+<p>Create the next KvK or close an existing one. Each action has its own workflow.</p>
+<div class="admin-module-actions"><button id="btAddKvk" type="button">ADD NEW KVK</button><button id="btCloseKvk" type="button" class="bt-outline-danger">CLOSE KVK</button></div>
 <small>Create or safely close a tracked KvK</small>
-<p class="native-selection-context" id="kvkManagementContext" aria-live="polite">KvK status: loading…</p><p id="status" role="status" hidden>Checking Leadership authorization…</p></article>
+<p id="status" role="status" hidden>Checking Leadership authorization…</p></article>
 <article class="admin-module-card">
 <h4>Kingdom Scan</h4>
 <p>Select a Kingdom scan and validate it locally before any future import into BattleTrack.</p>
@@ -45,15 +45,15 @@ body{background:#0d101b;color:#eee;font-family:system-ui,sans-serif}
 <h4>Current KvK Overview</h4>
 <p>Leadership view for Governor performance, Requirements and current progress.</p>
 <button id="openKvkOverview" type="button" disabled>OPEN KVK OVERVIEW</button>
-<small>Available when scan data exists for the selected KvK</small><p class="native-selection-context" id="overviewContext" aria-live="polite">Selected KvK: loading…</p>
+<small>Only the currently active KvK · read-only</small>
 </article>
 <article class="admin-module-card">
 <h4>Comparison &amp; Export</h4>
-<p>Load the selected KvK comparison and export its Governor data as CSV.</p>
-<div class="native-kvk-data"><div hidden="" id="content"><label for="kvkSelect">SELECT KVK</label> <select id="kvkSelect"></select></div></div>
-<small>Historical: START → END · Active: START → LATEST</small><p class="native-selection-context" id="comparisonContext" aria-live="polite">Comparison source: loading…</p>
-<div class="comparison-actions"><button id="loadComparison" type="button" disabled>LOAD COMPARISON</button><button id="exportComparison" type="button" disabled>EXPORT CSV</button></div>
-<p class="comparison-state" id="comparisonState" role="status">Choose a KvK to load its comparison.</p>
+<p>Select a tracked KvK to compare Governor performance and export results.</p>
+<button id="btSelectComparisonKvk" type="button" disabled>SELECT KVK</button><div id="content" hidden><select id="kvkSelect" aria-label="Comparison KvK source" hidden></select></div>
+<small>Historical: START → END · Active: START → LATEST</small><p class="native-selection-context" id="comparisonContext" aria-live="polite" hidden></p>
+<div class="comparison-actions" id="btComparisonActions" hidden><button id="loadComparison" type="button" disabled>LOAD COMPARISON</button><button id="exportComparison" type="button" disabled>EXPORT CSV</button></div>
+<p class="comparison-state" id="comparisonState" role="status" hidden></p>
 
 </article>
 </div>
@@ -76,9 +76,10 @@ document.getElementById('btDiscordLogout').addEventListener('click', async () =>
  const percent=v=>v===null||v===undefined?'—':(Number(v)*100).toFixed(2)+'%';
  let currentComparison=null;
  let comparisonRequestId=0;
+ let currentComparisonKvk='';
  // Prevent spreadsheet formula execution when CSV data is opened in Excel/Sheets.
  const csvCell=v=>{const raw=String(v??'');const safe=/^[\s\u0000-\u001f]*[=+@-]/.test(raw)?"'"+raw:raw;return '"'+safe.replace(/"/g,'""')+'"'};
- function resetComparison(){comparisonRequestId++;currentComparison=null;byId('comparisonResults').hidden=true;byId('comparisonRows').replaceChildren();byId('exportComparison').disabled=true;byId('comparisonState').textContent='Ready to load comparison for '+byId('kvkSelect').value+'.';}
+ function resetComparison(){comparisonRequestId++;currentComparison=null;byId('comparisonResults').hidden=true;byId('comparisonRows').replaceChildren();byId('exportComparison').disabled=true;byId('comparisonState').textContent=currentComparisonKvk?'Ready to load comparison for '+currentComparisonKvk+'.':'';}
  byId('loadComparison').addEventListener('click',async()=>{
   const id=byId('kvkSelect').value;if(!id)return;
   resetComparison();const ticket=comparisonRequestId;byId('loadComparison').disabled=true;byId('comparisonState').textContent='Loading signed comparison for '+id+'…';
@@ -115,19 +116,18 @@ document.getElementById('btDiscordLogout').addEventListener('click', async () =>
    option.textContent='KvK '+kvk.number+' · '+kvk.seasonName+' · '+(historical?'HISTORICAL':'ACTIVE');
    select.append(option)
   }
-  function render(){
-   const kvk=list.find(x=>x.id===select.value);
-   resetComparison();
-   if(!kvk){byId('loadComparison').disabled=true;byId('openKvkOverview').disabled=true;set('kvkManagementContext','No KvK selected.');return}
-   const historical=String(kvk.status||'').toLowerCase()==='historical';
-   set('kvkManagementContext','Selected: '+kvk.id+' · '+(historical?'HISTORICAL · CLOSED':'ACTIVE · READ-ONLY')+' · '+(kvk.seasonName||'—'));
-   set('overviewContext','Selected KvK: '+kvk.id+' · '+kvk.seasonName+' ('+(historical?'historical':'active')+', read-only)');
-   set('comparisonContext','Comparison source: '+kvk.id+' · '+(historical?'START → END':'START → LATEST'));
-   byId('loadComparison').disabled=false;
-   byId('openKvkOverview').disabled=false;
-  }
-  select.addEventListener('change',()=>{const overview=byId('btOverviewDialog');if(overview?.open)overview.close();render()});render();byId('loadComparison').disabled=false;byId('openKvkOverview').disabled=false;content.hidden=false;status.textContent='';status.hidden=true;
- }catch(error){status.hidden=false;status.textContent=error.message+' No KvK data displayed.';document.getElementById('kvkManagementContext').textContent='KvK list unavailable (read-only).';document.getElementById('overviewContext').textContent='No authorized KvK context available.';document.getElementById('comparisonContext').textContent='No authorized KvK context available.'}
+  window.BattleTrackLeadershipKvks=list;
+  const active=list.filter(k=>String(k.status||'').toLowerCase()!=='historical').sort((a,b)=>Number(b.number)-Number(a.number))[0]||null;
+  window.BattleTrackActiveKvk=active;
+  byId('openKvkOverview').disabled=!active;
+  byId('btSelectComparisonKvk').disabled=!list.length;
+  byId('btComparisonActions').hidden=true;
+  byId('comparisonState').hidden=true;
+  byId('comparisonContext').hidden=true;
+  byId('loadComparison').disabled=true;
+  content.hidden=false;status.textContent='';status.hidden=true;
+  document.dispatchEvent(new CustomEvent('battletrack:kvks-ready',{detail:{kvks:list,active}}));
+ }catch(error){status.hidden=false;status.textContent=error.message+' No KvK data displayed.';byId('btSelectComparisonKvk').disabled=true;byId('openKvkOverview').disabled=true}
 })();
 </script><style>
 /* CF-016: Scoped overview dialog. No changes to existing four-card layout. */
@@ -145,7 +145,7 @@ document.getElementById('btDiscordLogout').addEventListener('click', async () =>
 </style>
 <dialog id="btOverviewDialog" aria-labelledby="btOverviewTitle">
  <div class="ov-head"><div><h3 id="btOverviewTitle">Current KvK Overview</h3><div class="ov-meta" id="btOverviewMeta"></div></div><button type="button" id="btOverviewClose" aria-label="Close overview">CLOSE ✕</button></div>
- <p class="ov-message" id="btOverviewMessage" role="status">Select a KvK to view its Governors.</p>
+ <p class="ov-message" id="btOverviewMessage" role="status">Loading current KvK Governors…</p>
  <div id="btOverviewContent" hidden>
   <div class="ov-stats"><div class="ov-stat"><span>GOVERNORS</span><strong id="ovTotal">—</strong></div><div class="ov-stat"><span>REQUIREMENT MET</span><strong id="ovMet">—</strong></div><div class="ov-stat"><span id="ovProgressLabel">IN PROGRESS</span><strong id="ovProgress">—</strong></div><div class="ov-stat"><span>AVERAGE PROGRESS</span><strong id="ovAverage">—</strong></div></div>
   <div class="ov-filters"><input id="ovSearch" type="search" placeholder="Search Governor or ID" aria-label="Search Governor or ID"/><select id="ovStatus" aria-label="Filter by status"><option value="ALL">ALL STATUS</option></select><select id="ovSort" aria-label="Sort Governors"><option value="overall-asc">Progress: lowest first</option><option value="overall-desc">Progress: highest first</option><option value="dkp-desc">DKP: highest first</option><option value="deads-desc">Deads: highest first</option><option value="kills-desc">Kills: highest first</option><option value="power-desc">Start Power: highest first</option></select></div>
@@ -169,7 +169,7 @@ document.getElementById('btDiscordLogout').addEventListener('click', async () =>
  function stats(data){const historical=data.kvk.comparisonMode==='START_END',rows=data.rows,met=rows.filter(r=>group(r,historical)==='MET').length,notMet=rows.filter(r=>group(r,historical)===(historical?'NOT_MET':'IN_PROGRESS')).length,vals=rows.map(r=>Number(r.overallProgress)).filter(Number.isFinite),avg=vals.length?vals.reduce((a,b)=>a+b,0)/vals.length:0;
   $('btOverviewTitle').textContent='KvK '+data.kvk.number+' · '+(data.kvk.seasonName||data.kvk.id);$('btOverviewMeta').textContent=(data.kvk.status||'—')+' · '+(historical?'START → END':'START → LATEST')+' · '+(data.kvk.startDate||'—')+' → '+(historical?(data.kvk.endDate||'END'):'LATEST');$('ovTotal').textContent=fmt(rows.length);$('ovMet').textContent=fmt(met);$('ovProgressLabel').textContent=historical?'REQUIREMENT NOT MET':'IN PROGRESS';$('ovProgress').textContent=fmt(notMet);$('ovAverage').textContent=avg.toFixed(1)+'%';$('ovStatus').replaceChildren(...[['ALL','ALL STATUS'],['MET','REQUIREMENT MET'],[historical?'NOT_MET':'IN_PROGRESS',historical?'REQUIREMENT NOT MET':'IN PROGRESS']].map(([v,t])=>{const o=document.createElement('option');o.value=v;o.textContent=t;return o}));$('ovSearch').value='';$('ovSort').value='overall-asc';render();
  }
- $('openKvkOverview').addEventListener('click',async()=>{const id=$('kvkSelect').value;if(!id)return;const ticket=++requestNo;current=null;$('btOverviewContent').hidden=true;$('btOverviewMessage').textContent='Loading '+id+'…';dlg.showModal();try{const response=await fetch('/api/v1/leadership/comparisons/'+encodeURIComponent(id),{credentials:'same-origin',cache:'no-store'});const payload=await response.json();if(ticket!==requestNo||!dlg.open||$('kvkSelect').value!==id)return;if(!response.ok||!payload.ok||!payload.data?.ok)throw Error(payload.message||payload.data?.message||'HTTP '+response.status);const data=payload.data;if(data.kvk?.id!==id||!Array.isArray(data.rows)||data.total!==data.rows.length)throw Error('Overview response validation failed.');current=data;stats(data);$('btOverviewContent').hidden=false;$('btOverviewMessage').textContent='Read-only overview · '+data.total+' Governors.'}catch(error){if(ticket===requestNo&&dlg.open&&$('kvkSelect').value===id)$('btOverviewMessage').textContent='Overview unavailable: '+error.message}});
+ $('openKvkOverview').addEventListener('click',async()=>{const id=window.BattleTrackActiveKvk?.id;if(!id)return;const ticket=++requestNo;current=null;$('btOverviewContent').hidden=true;$('btOverviewMessage').textContent='Loading '+id+'…';dlg.showModal();try{const response=await fetch('/api/v1/leadership/comparisons/'+encodeURIComponent(id),{credentials:'same-origin',cache:'no-store'});const payload=await response.json();if(ticket!==requestNo||!dlg.open)return;if(!response.ok||!payload.ok||!payload.data?.ok)throw Error(payload.message||payload.data?.message||'HTTP '+response.status);const data=payload.data;if(data.kvk?.id!==id||!Array.isArray(data.rows)||data.total!==data.rows.length)throw Error('Overview response validation failed.');current=data;stats(data);$('btOverviewContent').hidden=false;$('btOverviewMessage').textContent='Read-only overview · '+data.total+' Governors.'}catch(error){if(ticket===requestNo&&dlg.open)$('btOverviewMessage').textContent='Overview unavailable: '+error.message}});
  $('btOverviewClose').addEventListener('click',()=>dlg.close());dlg.addEventListener('close',()=>{requestNo++;current=null});['ovSearch','ovStatus','ovSort'].forEach(id=>$(id).addEventListener(id==='ovSearch'?'input':'change',render));
 })();
 </script>
@@ -307,9 +307,75 @@ validation.textContent='LOCAL XLSX CONTENT CHECK\nWorksheet: 3903 (required)\n'+
 }
 
 document.getElementById('openScanPreview').addEventListener('click',()=>{
-const source=document.getElementById('kvkSelect');kvk.replaceChildren();for(const opt of source.options){const o=document.createElement('option');o.value=opt.value;o.textContent=opt.textContent;kvk.append(o)}kvk.value=source.value;display();dlg.showModal();});
+const source=document.getElementById('kvkSelect');kvk.replaceChildren();for(const opt of source.options){const o=document.createElement('option');o.value=opt.value;o.textContent=opt.textContent;kvk.append(o)}kvk.value=Array.from(kvk.options).find(o=>o.value===window.BattleTrackActiveKvk?.id)?.value||kvk.options[0]?.value||'';display();dlg.showModal();});
 document.getElementById('btScanClose').addEventListener('click',()=>dlg.close());
 for(const e of [file,kvk,snap])e.addEventListener('change',display);
+})();
+</script>
+
+<style>
+/* CF-013.3: original four independent action cards; no shared selection context. */
+#btComparisonActions[hidden],#comparisonContext[hidden],#comparisonState[hidden]{display:none!important}
+.admin-module-card .admin-module-actions button{font-weight:800}
+.admin-module-card .bt-outline-danger{background:#100e16!important;color:#f7a7aa!important;border:1px solid #ae6372!important;box-shadow:none!important}
+.bt-leadership-dialog{box-sizing:border-box;border:1px solid #987329;border-radius:14px;background:#091724;color:#e9eff5;padding:24px;width:min(680px,94vw);max-height:90vh;overflow:auto;box-shadow:0 20px 80px #000c;font:13px system-ui,sans-serif}
+.bt-leadership-dialog::backdrop{background:#000b}.bt-leadership-dialog *{box-sizing:border-box}
+.bt-leadership-dialog h3{font:700 24px Georgia,serif;color:#fff;margin:3px 0 8px}
+.bt-leadership-dialog .bt-kicker{color:#f6c354;font-size:11px;letter-spacing:.14em;font-weight:800}
+.bt-leadership-dialog p{color:#a9c0d1;line-height:1.5;margin:0 0 17px}
+.bt-leadership-dialog label{display:block;color:#e7bd59;font-size:11px;letter-spacing:.08em;font-weight:700;margin:14px 0 5px}
+.bt-leadership-dialog input,.bt-leadership-dialog select{width:100%;background:#07131e;border:1px solid #354c62;color:#fff;border-radius:9px;padding:12px;font:inherit}
+.bt-leadership-dialog .bt-dlg-top{display:flex;justify-content:space-between;align-items:start;gap:10px}
+.bt-leadership-dialog .bt-dlg-x{width:auto;min-width:42px;background:transparent;border:1px solid #354c62;color:#b9c7d6;border-radius:8px;padding:9px;cursor:pointer}
+.bt-leadership-dialog .bt-dlg-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.bt-leadership-dialog .bt-dlg-stat{border:1px solid #2b3e50;border-radius:10px;padding:12px;background:#06121d}
+.bt-leadership-dialog .bt-dlg-stat small{display:block;color:#8aa2b5;margin-bottom:5px}
+.bt-leadership-dialog .bt-dlg-stat strong{font-size:15px;color:#fff}
+.bt-leadership-dialog .bt-dlg-notice{border:1px solid #655024;border-radius:9px;padding:12px;color:#f1c76c;background:#131409;margin:14px 0;line-height:1.6}
+.bt-leadership-dialog .bt-dlg-primary{width:100%;background:linear-gradient(#ffe18a,#d9950c);color:#080d13;font-weight:800;border:1px solid #ffe09b;border-radius:9px;padding:13px;margin-top:15px;cursor:pointer}
+.bt-leadership-dialog .bt-dlg-primary:disabled{opacity:.45;cursor:not-allowed}
+.bt-leadership-dialog .bt-dlg-footer{border:1px solid #1e5649;border-radius:8px;padding:10px;margin-top:12px;color:#7fdbba;font-size:11px}
+@media(max-width:600px){.bt-leadership-dialog .bt-dlg-grid{grid-template-columns:1fr}.bt-leadership-dialog{padding:16px}}
+</style>
+<dialog class="bt-leadership-dialog" id="btCreateKvkDialog" aria-labelledby="btCreateTitle">
+ <div class="bt-dlg-top"><div><div class="bt-kicker">KVK MANAGEMENT</div><h3 id="btCreateTitle">Add New KvK</h3></div><button type="button" class="bt-dlg-x" data-close="btCreateKvkDialog" aria-label="Close">✕</button></div>
+ <p>BattleTrack determines the next KvK number independently of comparison selection. The planned end date is start + 50 days and remains editable.</p>
+ <div class="bt-dlg-grid"><div class="bt-dlg-stat"><small>NEXT KVK</small><strong id="btNextKvkNumber">—</strong></div><div class="bt-dlg-stat"><small>KVK ID</small><strong id="btNextKvkId">—</strong></div></div>
+ <label for="btCreateStory">KVK STORY</label><select id="btCreateStory"><option value="">Story Catalog pending secure backend connection</option></select>
+ <div class="bt-dlg-grid"><div><label for="btCreateStart">KVK START</label><input type="date" id="btCreateStart"></div><div><label for="btCreateEnd">KVK END (AUTO +50 DAYS · EDITABLE)</label><input type="date" id="btCreateEnd"></div></div>
+ <div class="bt-dlg-notice">SEASON NAME<br><strong id="btCreateSeason">Select a story</strong></div>
+ <button class="bt-dlg-primary" type="button" disabled title="A protected creation endpoint and verified Story Catalog are required">CREATE KVK · NOT YET AVAILABLE</button>
+ <div class="bt-dlg-footer">SAFE PREVIEW ONLY · No KvK created. The Story Catalog and production write endpoint must be migrated and authorized first.</div>
+</dialog>
+<dialog class="bt-leadership-dialog" id="btCloseKvkDialog" aria-labelledby="btCloseTitle">
+ <div class="bt-dlg-top"><div><div class="bt-kicker">KVK MANAGEMENT</div><h3 id="btCloseTitle">Close KvK</h3></div><button type="button" class="bt-dlg-x" data-close="btCloseKvkDialog" aria-label="Close">✕</button></div>
+ <p>Closing a KvK is independent of Comparison. Only active KvKs are eligible for review.</p>
+ <label for="btCloseTarget">ACTIVE KVK</label><select id="btCloseTarget"></select>
+ <div class="bt-dlg-notice">Closing a KvK is a permanent administrative operation. This preview does not change the database.</div>
+ <button class="bt-dlg-primary" type="button" disabled>CLOSE KVK · NOT YET AVAILABLE</button>
+ <div class="bt-dlg-footer">PROTECTED ACTION · Requires verified write API, confirmation and audit logging.</div>
+</dialog>
+<dialog class="bt-leadership-dialog" id="btComparisonSelectorDialog" aria-labelledby="btSelectorTitle">
+ <div class="bt-dlg-top"><div><div class="bt-kicker">LEADERSHIP KVK SELECTOR</div><h3 id="btSelectorTitle">Select KvK</h3></div><button type="button" class="bt-dlg-x" data-close="btComparisonSelectorDialog" aria-label="Close">✕</button></div>
+ <p>Choose a tracked KvK. Historical seasons use START → END; active seasons use START → LATEST.</p>
+ <label for="btComparisonChoice">KVK / SEASON</label><select id="btComparisonChoice"><option value="">SELECT KVK / SEASON</option></select>
+ <div class="bt-dlg-grid" style="margin-top:15px"><div class="bt-dlg-stat"><small>KVK</small><strong id="btSelectorKvk">—</strong></div><div class="bt-dlg-stat"><small>STATUS</small><strong id="btSelectorStatus">—</strong></div><div class="bt-dlg-stat"><small>COMPARISON</small><strong id="btSelectorMode">—</strong></div><div class="bt-dlg-stat"><small>WINDOW</small><strong id="btSelectorWindow">—</strong></div></div>
+ <button type="button" class="bt-dlg-primary" id="btUseComparisonChoice" disabled>USE SELECTED KVK</button>
+ <div class="bt-dlg-footer">COMPARISON MODE · Read-only. No database changes. CSV is generated locally.</div>
+</dialog>
+<script>
+(()=>{'use strict';
+const $=id=>document.getElementById(id);
+const open=id=>$(id).showModal();
+for(const btn of document.querySelectorAll('[data-close]'))btn.addEventListener('click',()=>$(btn.dataset.close).close());
+for(const dlg of document.querySelectorAll('.bt-leadership-dialog'))dlg.addEventListener('click',e=>{if(e.target===dlg)dlg.close()});
+const getKvks=()=>window.BattleTrackLeadershipKvks||[];
+$('btAddKvk').addEventListener('click',()=>{const list=getKvks(),next=Math.max(0,...list.map(x=>Number(x.number)||0))+1;$('btNextKvkNumber').textContent='KvK '+next;$('btNextKvkId').textContent='3903-KVK'+next;$('btCreateStory').value='';$('btCreateStart').value='';$('btCreateEnd').value='';$('btCreateSeason').textContent='Select a story';open('btCreateKvkDialog')});
+$('btCreateStart').addEventListener('change',()=>{const value=$('btCreateStart').value;if(!value){$('btCreateEnd').value='';return}const date=new Date(value+'T00:00:00Z');date.setUTCDate(date.getUTCDate()+50);$('btCreateEnd').value=date.toISOString().slice(0,10)});
+$('btCloseKvk').addEventListener('click',()=>{const target=$('btCloseTarget');target.replaceChildren();const active=getKvks().filter(k=>String(k.status||'').toLowerCase()!=='historical');for(const k of active){const opt=document.createElement('option');opt.value=k.id;opt.textContent='KvK '+k.number+' · '+k.seasonName+' · ACTIVE';target.append(opt)}if(!active.length){const opt=document.createElement('option');opt.textContent='No active KvK available';target.append(opt)}open('btCloseKvkDialog')});
+$('btSelectComparisonKvk').addEventListener('click',()=>{const choice=$('btComparisonChoice');choice.replaceChildren();const empty=document.createElement('option');empty.value='';empty.textContent='SELECT KVK / SEASON';choice.append(empty);for(const k of getKvks()){const o=document.createElement('option');o.value=k.id;o.textContent='KvK '+k.number+' · '+k.seasonName+' · '+(String(k.status||'').toLowerCase()==='historical'?'HISTORICAL':'ACTIVE');choice.append(o)}choice.value=$('kvkSelect').value&&$('btComparisonActions').hidden===false?$('kvkSelect').value:'';choice.dispatchEvent(new Event('change'));open('btComparisonSelectorDialog')});
+$('btComparisonChoice').addEventListener('change',()=>{const k=getKvks().find(x=>x.id===$('btComparisonChoice').value);const historical=String(k?.status||'').toLowerCase()==='historical';$('btSelectorKvk').textContent=k?.id||'—';$('btSelectorStatus').textContent=k?(historical?'HISTORICAL':'ACTIVE'):'—';$('btSelectorMode').textContent=k?(historical?'START → END':'START → LATEST'):'—';$('btSelectorWindow').textContent=k?((k.startDate||'START')+' → '+(historical?(k.endDate||'END'):'LATEST')):'—';$('btUseComparisonChoice').disabled=!k});
+$('btUseComparisonChoice').addEventListener('click',()=>{const id=$('btComparisonChoice').value;if(!getKvks().some(k=>k.id===id))return;const k=getKvks().find(k=>k.id===id);$('kvkSelect').value=id;$('kvkSelect').dispatchEvent(new Event('change'));$('comparisonResults').hidden=true;$('comparisonRows').replaceChildren();$('exportComparison').disabled=true;$('btComparisonActions').hidden=false;$('comparisonContext').hidden=false;$('comparisonState').hidden=false;$('comparisonContext').textContent='Comparison source: '+id+' · '+(String(k.status||'').toLowerCase()==='historical'?'START → END':'START → LATEST');$('comparisonState').textContent='Ready to load comparison for '+id+'.';$('loadComparison').disabled=false;$('btComparisonSelectorDialog').close()});
 })();
 </script>
 </body></html>
