@@ -177,14 +177,19 @@ document.getElementById('btDiscordLogout').addEventListener('click', async () =>
 #btScanDialog{border:1px solid #977337;border-radius:12px;background:#0c1925;color:#f2efe7;width:min(760px,95vw);max-height:90vh;overflow:auto;padding:22px;font:14px system-ui,sans-serif}
 #btScanDialog::backdrop{background:#03080ed9}#btScanDialog *{box-sizing:border-box}
 #btScanDialog h3{color:#eab85c;margin:0 0 8px}#btScanDialog p{color:#b5c8d8}#btScanDialog label{display:block;margin:15px 0 5px;color:#e9c46e;font-weight:600}
-#btScanDialog select,#btScanDialog input{width:100%;padding:11px;background:#102131;color:#fff;border:1px solid #596979;border-radius:7px}
+#btScanDialog select{width:100%;padding:11px;background:#102131;color:#fff;border:1px solid #596979;border-radius:7px}
+#btScanDialog .scan-file-zone{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;min-height:104px;padding:20px 14px;background:rgba(233,185,87,.035);border:1px dashed #a97a26;border-radius:11px;text-align:center;cursor:pointer;transition:background .15s,border-color .15s}
+#btScanDialog .scan-file-zone:hover,#btScanDialog .scan-file-zone:focus-within{background:rgba(233,185,87,.11);border-color:#f5be50}
+#btScanDialog .scan-file-zone strong{color:#f3bd58;letter-spacing:.06em;font-size:12px}
+#btScanDialog .scan-file-zone span{color:#a9b9c9;font-size:12px}
+#btScanDialog #btScanFile{position:absolute;width:1px;height:1px;opacity:0;overflow:hidden;clip-path:inset(50%)}
 #btScanDialog .scan-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:20px}#btScanDialog button{width:auto!important;min-width:120px}
 #btScanDialog .scan-report{margin-top:18px;border:1px solid #33465a;padding:12px;border-radius:8px;white-space:pre-wrap;line-height:1.65}
 </style>
 <dialog id="btScanDialog" aria-label="Kingdom Scan local preview">
 <h3>Kingdom Scan · Local Preview</h3>
 <p>Choose an XLSX file and review its basic file metadata and target assignment. Governor rows are checked locally in your browser. Nothing is uploaded or imported.</p>
-<label for="btScanFile">Kingdom scan (.xlsx)</label><input id="btScanFile" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
+<label class="scan-file-zone" for="btScanFile"><strong>SELECT KINGDOM SCAN</strong><span id="btScanFileLabel">XLSX · validate first · nothing is imported</span><input id="btScanFile" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"></label>
 <label for="btScanKvk">Target KvK (read-only assignment)</label><select id="btScanKvk"></select>
 <label for="btScanSnapshot">Snapshot type</label><select id="btScanSnapshot"><option value="">Choose snapshot</option><option value="START">START</option><option value="MIDDLE">MIDDLE</option><option value="END">END</option></select>
 <div id="btScanReport" class="scan-report" role="status">No file selected. Nothing has been uploaded or saved.</div>
@@ -196,6 +201,7 @@ document.getElementById('btDiscordLogout').addEventListener('click', async () =>
 const dlg=document.getElementById('btScanDialog'),file=document.getElementById('btScanFile'),kvk=document.getElementById('btScanKvk'),snap=document.getElementById('btScanSnapshot'),report=document.getElementById('btScanReport');
 
 const validation=document.getElementById('btScanValidation');
+file.addEventListener('change',()=>{document.getElementById('btScanFileLabel').textContent=file.files?.[0]?.name||'XLSX · validate first · nothing is imported'});
 let run=0;
 const xml=text=>{const d=new DOMParser().parseFromString(text,'application/xml');if(d.querySelector('parsererror'))throw Error('Invalid workbook XML');return d};
 const children=(node,name)=>Array.from(node?.children||[]).filter(n=>n.localName===name);
