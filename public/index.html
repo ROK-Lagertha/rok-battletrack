@@ -4,12 +4,25 @@
   <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="stylesheet" href="/battletrack.css">
+  <style>
+    /* CF-CUTOVER-01.6: visual-only navigation update. Legacy admin code stays intact. */
+    .discord-admin-login{display:inline-flex;align-items:center;justify-content:center;gap:9px;min-height:38px;padding:5px 12px;border:1px solid #6977ff;border-radius:9px;background:linear-gradient(145deg,#5865f2,#3946a9);color:#fff;text-decoration:none;box-shadow:0 2px 12px #5865f230;font-family:system-ui,-apple-system,Segoe UI,sans-serif;line-height:1.12;transition:filter .18s ease,transform .18s ease}
+    .discord-admin-login:hover{filter:brightness(1.15);transform:translateY(-1px)}
+    .discord-admin-login:focus-visible{outline:2px solid #f1cf78;outline-offset:3px}
+    .discord-admin-icon{width:25px;height:20px;flex:none}
+    .discord-admin-copy{display:flex;flex-direction:column;align-items:flex-start;gap:2px;white-space:nowrap}
+    .discord-admin-copy strong{font-size:11px;font-weight:800;letter-spacing:.65px}
+    .discord-admin-copy small{font-size:10px;color:#e6e8ff;font-weight:600}
+    @media(max-width:410px){.discord-admin-login{gap:6px;padding:5px 8px}.discord-admin-icon{width:21px}.discord-admin-copy strong{font-size:10px}}
+  </style>
 </head>
 <body>
   <div class="page-shell">
     <nav class="battletrack-menu" aria-label="BattleTrack navigation">
-      <a href="/leadership" title="Leadership Command Center via Discord" style="display:inline-block;padding:8px 12px;border:1px solid #b99140;border-radius:8px;color:#f1cf78;text-decoration:none;font:600 12px system-ui">LEADERSHIP · DISCORD</a>
-      <button id="adminOpenBtn" class="admin-nav-btn" type="button" onclick="location.href='/leadership'"><span aria-hidden="true">&#9670;</span><span>ADMIN</span></button>
+      <a href="/leadership" class="discord-admin-login" title="Sign in to BattleTrack Leadership with Discord" aria-label="Admin login via Discord">
+        <svg class="discord-admin-icon" viewBox="0 0 127.14 96.36" aria-hidden="true" focusable="false"><path fill="currentColor" d="M104.4 8.14A102.2 102.2 0 0 0 79.66 0a72.2 72.2 0 0 0-3.16 6.52 94.2 94.2 0 0 0-28.86 0A72.4 72.4 0 0 0 44.48 0a102.2 102.2 0 0 0-24.74 8.14C4.1 31.5-.14 54.28 1.98 76.74a102.9 102.9 0 0 0 30.36 15.34 74.9 74.9 0 0 0 6.5-10.54 66.7 66.7 0 0 1-10.24-4.96c.86-.63 1.7-1.28 2.52-1.94 19.74 9.28 41.16 9.28 60.66 0 .82.66 1.66 1.31 2.52 1.94a66.7 66.7 0 0 1-10.24 4.96 74.9 74.9 0 0 0 6.5 10.54 102.9 102.9 0 0 0 30.36-15.34c2.5-26.03-4.28-48.6-17.76-68.6ZM42.45 65.2c-5.93 0-10.8-5.46-10.8-12.18s4.76-12.2 10.8-12.2c6.1 0 10.92 5.51 10.81 12.2 0 6.72-4.76 12.18-10.81 12.18Zm42.24 0c-5.93 0-10.8-5.46-10.8-12.18s4.76-12.2 10.8-12.2c6.1 0 10.92 5.51 10.81 12.2 0 6.72-4.76 12.18-10.81 12.18Z"/></svg>
+        <span class="discord-admin-copy"><strong>ADMIN LOGIN</strong><small>via Discord</small></span>
+      </a>
       <button id="menuToggle" class="menu-toggle" type="button" aria-expanded="false" aria-controls="menuDropdown" onclick="toggleBattletrackMenu()">
         <span class="menu-icon" aria-hidden="true">&#9776;</span><span>MENU</span>
       </button>
