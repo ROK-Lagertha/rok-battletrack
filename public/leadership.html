@@ -119,7 +119,13 @@ document.getElementById('btDiscordLogout').addEventListener('click', async () =>
   window.BattleTrackLeadershipKvks=list;
   // CF-013.4: Stories come exclusively from the signed, Officer+Data protected bridge.
   window.BattleTrackLeadershipStories=Array.isArray(data.stories)?data.stories.filter(st=>st&&typeof st.name==='string'&&st.name.trim()):[];
-  window.BattleTrackLeadershipNext={number:Number(data.nextNumber)||null,id:String(data.nextKvkId||'')};
+  const knownNumbers=list.map(k=>Number(k.number)||Number(String(k.id||'').match(/-KVK(\d+)$/)?.[1])||0);
+  const derivedNext=Math.max(0,...knownNumbers)+1;
+  const suppliedNext=Number(data.nextNumber)||0;
+  const safeNext=Math.max(derivedNext,suppliedNext);
+  const suppliedId=String(data.nextKvkId||'');
+  const expectedId='3903-KVK'+safeNext;
+  window.BattleTrackLeadershipNext={number:safeNext,id:suppliedId===expectedId?suppliedId:expectedId};
   const storySelect=document.getElementById('btCreateStory');
   if(storySelect){
     storySelect.replaceChildren();

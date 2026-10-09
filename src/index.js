@@ -209,7 +209,8 @@ export default {
         url.pathname === "/api/v1/leadership/kvks/validate-close") {
       if (request.method !== "POST") return apiError(405, "METHOD_NOT_ALLOWED", "POST required.");
       try {
-        const auth = await discordAuth(request, env, "/api/auth/discord/me");
+        const sessionCheck = new Request(new URL("/api/auth/discord/me", request.url), {method:"GET",headers:{cookie:request.headers.get("cookie")||""}});
+        const auth = await discordAuth(sessionCheck, env, "/api/auth/discord/me");
         if (!auth.ok) return apiError(auth.status === 401 ? 401 : 403, "LEADERSHIP_ACCESS_DENIED", "Discord Officer and Data roles are required.");
         const type = url.pathname.endsWith("validate-create") ? "create" : "close";
         if (!(request.headers.get("content-type") || "").toLowerCase().startsWith("application/json")) {
@@ -237,8 +238,9 @@ export default {
           if (!validStory) return apiError(400, "INVALID_STORY", "Story must exist in the active catalog.");
           if (!isIsoDate(payload.startDate) || !isIsoDate(payload.endDate) || payload.endDate < payload.startDate)
             return apiError(400, "INVALID_DATE_RANGE", "Valid start and end dates are required.");
-          const nextNumber = Number(management.nextNumber);
-          const nextKvkId = String(management.nextKvkId || "");
+          const derivedNext = Math.max(0,...kvks.map(item => Number(item.number) || Number(String(item.id || "").match(/-KVK(\d+)$/)?.[1]) || 0)) + 1;
+          const nextNumber = Math.max(derivedNext, Number(management.nextNumber) || 0);
+          const nextKvkId = "3903-KVK" + nextNumber;
           if (!Number.isSafeInteger(nextNumber) || nextNumber < 1 || !/^3903-KVK[1-9]\d*$/.test(nextKvkId))
             return apiError(503, "CATALOG_INCOMPLETE", "Next KvK metadata unavailable.");
           if (kvks.some(item => item.id === nextKvkId)) return apiError(409, "KVK_ALREADY_EXISTS", "KvK ID already exists.");
