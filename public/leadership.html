@@ -393,8 +393,27 @@ for(const btn of document.querySelectorAll('[data-close]'))btn.addEventListener(
 for(const dlg of document.querySelectorAll('.bt-leadership-dialog'))dlg.addEventListener('click',e=>{if(e.target===dlg)dlg.close()});
 const getKvks=()=>window.BattleTrackLeadershipKvks||[];
 // CF-013.5.2: preflight-only. These buttons never call any write endpoint.
+// CF-013.6.3: a validation belongs only to the exact form values checked.
+const validationSerial={create:0,close:0};
+const validationInputs={
+ create:['btCreateStory','btCreateStart','btCreateEnd'],
+ close:['btCloseTarget','btCloseResult','btCloseDate']
+};
+function invalidatePreflight(type){
+ validationSerial[type]++;
+ const output=$(type==='create'?'btCreateValidation':'btCloseValidation');
+ output.dataset.state='';
+ output.textContent='Inputs changed · validate again before proceeding. NO DATA WRITTEN.';
+}
+for(const [type,ids] of Object.entries(validationInputs)){
+ for(const id of ids){
+  const el=$(id);
+  if(el){el.addEventListener('input',()=>invalidatePreflight(type));el.addEventListener('change',()=>invalidatePreflight(type));}
+ }
+}
 async function runKvkPreflight(type, payload, outputId){
  const output=$(outputId),button=$(type==='create'?'btValidateCreate':'btValidateClose');
+ const serial=++validationSerial[type];
  output.dataset.state='';output.textContent='Validating securely…';button.disabled=true;
  try{
   const response=await fetch('/api/v1/leadership/kvks/validate-'+type,{
@@ -402,13 +421,14 @@ async function runKvkPreflight(type, payload, outputId){
    headers:{'content-type':'application/json'},body:JSON.stringify(payload)
   });
   const data=await response.json();
+  if(serial!==validationSerial[type])return;
   if(!response.ok||!data.ok)throw Error(data.message||'Validation failed (HTTP '+response.status+').');
   if(data.mode!=='VALIDATION_ONLY'||data.writesEnabled!==false)throw Error('Unexpected validation response. No action taken.');
   output.dataset.state='ok';
   output.textContent=type==='create'
    ?'VALIDATED · '+data.kvkId+' · '+data.seasonName+' · '+data.startDate+' → '+data.endDate+' · NO DATA WRITTEN'
    :'VALIDATED · '+data.kvkId+' · '+data.result+' · '+data.actualEndDate+' · NO DATA WRITTEN';
- }catch(error){output.dataset.state='error';output.textContent='Not validated: '+error.message}
+ }catch(error){if(serial===validationSerial[type]){output.dataset.state='error';output.textContent='Not validated: '+error.message}}
  finally{button.disabled=false}
 }
 $('btValidateCreate').addEventListener('click',()=>{
@@ -427,9 +447,9 @@ $('btCreateStory').addEventListener('change',()=>{
  const story=(window.BattleTrackLeadershipStories||[]).find(item=>item.name===selected);
  $('btCreateSeason').textContent=story?story.name:'Select a story';
 });
-$('btAddKvk').addEventListener('click',()=>{const list=getKvks(),next=Number(window.BattleTrackLeadershipNext?.number)||Math.max(0,...list.map(x=>Number(x.number)||0))+1;$('btNextKvkNumber').textContent='KvK '+next;$('btNextKvkId').textContent=window.BattleTrackLeadershipNext?.id||'3903-KVK'+next;$('btCreateStory').value='';$('btCreateStart').value='';$('btCreateEnd').value='';$('btCreateSeason').textContent='Select a story';$('btCreateValidation').dataset.state='';$('btCreateValidation').textContent='Choose a story and dates to run a secure preflight check.';open('btCreateKvkDialog')});
+$('btAddKvk').addEventListener('click',()=>{invalidatePreflight('create');const list=getKvks(),next=Number(window.BattleTrackLeadershipNext?.number)||Math.max(0,...list.map(x=>Number(x.number)||0))+1;$('btNextKvkNumber').textContent='KvK '+next;$('btNextKvkId').textContent=window.BattleTrackLeadershipNext?.id||'3903-KVK'+next;$('btCreateStory').value='';$('btCreateStart').value='';$('btCreateEnd').value='';$('btCreateSeason').textContent='Select a story';$('btCreateValidation').dataset.state='';$('btCreateValidation').textContent='Choose a story and dates to run a secure preflight check.';open('btCreateKvkDialog')});
 $('btCreateStart').addEventListener('change',()=>{const value=$('btCreateStart').value;if(!value){$('btCreateEnd').value='';return}const date=new Date(value+'T00:00:00Z');date.setUTCDate(date.getUTCDate()+50);$('btCreateEnd').value=date.toISOString().slice(0,10)});
-$('btCloseKvk').addEventListener('click',()=>{const target=$('btCloseTarget');target.replaceChildren();const active=getKvks().filter(k=>String(k.status||'').toLowerCase()!=='historical');for(const k of active){const opt=document.createElement('option');opt.value=k.id;opt.textContent='KvK '+k.number+' · '+k.seasonName+' · ACTIVE';target.append(opt)}if(!active.length){const opt=document.createElement('option');opt.textContent='No active KvK available';target.append(opt)}$('btCloseResult').value='';$('btCloseDate').value='';$('btCloseValidation').dataset.state='';$('btCloseValidation').textContent=active.length?'Select an active KvK, result and end date to validate.':'No active KvK: closure validation is unavailable.';$('btValidateClose').disabled=!active.length;open('btCloseKvkDialog')});
+$('btCloseKvk').addEventListener('click',()=>{invalidatePreflight('close');const target=$('btCloseTarget');target.replaceChildren();const active=getKvks().filter(k=>String(k.status||'').toLowerCase()!=='historical');for(const k of active){const opt=document.createElement('option');opt.value=k.id;opt.textContent='KvK '+k.number+' · '+k.seasonName+' · ACTIVE';target.append(opt)}if(!active.length){const opt=document.createElement('option');opt.textContent='No active KvK available';target.append(opt)}$('btCloseResult').value='';$('btCloseDate').value='';$('btCloseValidation').dataset.state='';$('btCloseValidation').textContent=active.length?'Select an active KvK, result and end date to validate.':'No active KvK: closure validation is unavailable.';$('btValidateClose').disabled=!active.length;open('btCloseKvkDialog')});
 $('btSelectComparisonKvk').addEventListener('click',()=>{const choice=$('btComparisonChoice');choice.replaceChildren();const empty=document.createElement('option');empty.value='';empty.textContent='SELECT KVK / SEASON';choice.append(empty);for(const k of getKvks()){const o=document.createElement('option');o.value=k.id;o.textContent='KvK '+k.number+' · '+k.seasonName+' · '+(String(k.status||'').toLowerCase()==='historical'?'HISTORICAL':'ACTIVE');choice.append(o)}choice.value=$('kvkSelect').value&&$('btComparisonActions').hidden===false?$('kvkSelect').value:'';choice.dispatchEvent(new Event('change'));open('btComparisonSelectorDialog')});
 $('btComparisonChoice').addEventListener('change',()=>{const k=getKvks().find(x=>x.id===$('btComparisonChoice').value);const historical=String(k?.status||'').toLowerCase()==='historical';$('btSelectorKvk').textContent=k?.id||'—';$('btSelectorStatus').textContent=k?(historical?'HISTORICAL':'ACTIVE'):'—';$('btSelectorMode').textContent=k?(historical?'START → END':'START → LATEST'):'—';$('btSelectorWindow').textContent=k?((k.startDate||'START')+' → '+(historical?(k.endDate||'END'):'LATEST')):'—';$('btUseComparisonChoice').disabled=!k});
 $('btUseComparisonChoice').addEventListener('click',()=>{const id=$('btComparisonChoice').value;if(!getKvks().some(k=>k.id===id))return;const k=getKvks().find(k=>k.id===id);$('kvkSelect').value=id;$('kvkSelect').dispatchEvent(new Event('change'));$('comparisonResults').hidden=true;$('comparisonRows').replaceChildren();$('exportComparison').disabled=true;$('btComparisonActions').hidden=false;$('comparisonContext').hidden=false;$('comparisonState').hidden=false;$('comparisonContext').textContent='Comparison source: '+id+' · '+(String(k.status||'').toLowerCase()==='historical'?'START → END':'START → LATEST');$('comparisonState').textContent='Ready to load comparison for '+id+'.';$('loadComparison').disabled=false;$('btComparisonSelectorDialog').close()});
