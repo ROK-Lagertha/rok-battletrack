@@ -203,6 +203,44 @@ export default {
       }
     }
 
+    // CF-013.10.1: TEST-only remote synthetic write endpoints. Disabled in GAS by default.
+    if (url.pathname === "/api/v1/leadership/test-bridge/create" || url.pathname === "/api/v1/leadership/test-bridge/close") {
+      if (request.method !== "POST") return apiError(405,"METHOD_NOT_ALLOWED","POST required.");
+      const origin=request.headers.get("origin");
+      if(origin!==url.origin) return apiError(403,"ORIGIN_DENIED","Same-origin request required.");
+      if(!(request.headers.get("content-type")||"").toLowerCase().startsWith("application/json")) return apiError(415,"JSON_REQUIRED","JSON required.");
+      try {
+        const sessionCheck=new Request(new URL("/api/auth/discord/me",request.url),{
+          method:"GET",headers:{cookie:request.headers.get("cookie")||""}
+        });
+        const auth=await discordAuth(sessionCheck,env,"/api/auth/discord/me");
+        if(!auth.ok) return apiError(auth.status===401?401:403,"LEADERSHIP_ACCESS_DENIED","Discord Officer and Data roles required.");
+        const body=await request.json();
+        const action=url.pathname.endsWith("/create")?"TEST_CREATE":"TEST_CLOSE";
+        if(!body || body.confirm!=="CONFIRM_"+action) return apiError(400,"CONFIRMATION_REQUIRED","Explicit test-only confirmation required.");
+        const endpoint=String(env.BT_TEST_BRIDGE_URL||"").trim();
+        const secret=String(env.BT_TEST_BRIDGE_SECRET||"");
+        if(!endpoint || secret.length<32) return apiError(503,"TEST_BRIDGE_NOT_CONFIGURED","Test bridge not configured.");
+        const target=new URL(endpoint);
+        if(target.protocol!=="https:" || target.hostname!=="script.google.com" || !/^\/macros\/s\/[A-Za-z0-9_-]+\/exec$/.test(target.pathname) || target.search || target.hash) return apiError(503,"TEST_BRIDGE_INVALID_URL","Invalid test bridge URL.");
+        const randomHex=()=>Array.from(crypto.getRandomValues(new Uint8Array(16)),b=>b.toString(16).padStart(2,"0")).join("");
+        const timestamp=Date.now(),nonce=randomHex(),requestId=randomHex(),confirmation="CONFIRM_"+action;
+        const message=`${timestamp}.${nonce}.${action}.${requestId}.${confirmation}`;
+        const key=await crypto.subtle.importKey("raw",new TextEncoder().encode(secret),{name:"HMAC",hash:"SHA-256"},false,["sign"]);
+        const signature=Array.from(new Uint8Array(await crypto.subtle.sign("HMAC",key,new TextEncoder().encode(message))),b=>b.toString(16).padStart(2,"0")).join("");
+        const upstream=await fetch(target.toString(),{method:"POST",headers:{"content-type":"application/json"},
+          body:JSON.stringify({timestamp,nonce,action,requestId,confirmation,signature}),redirect:"follow",signal:AbortSignal.timeout(12000)});
+        const raw=await upstream.text();let result;
+        try{result=JSON.parse(raw);}catch{return apiError(502,"TEST_BRIDGE_BAD_RESPONSE","Unexpected response.");}
+        if(result?.error==="REMOTE_TEST_WRITES_DISABLED") return apiError(423,"REMOTE_TEST_WRITES_DISABLED","Remote test writes not enabled.");
+        if(!upstream.ok || result?.ok!==true || result?.remoteTestOnly!==true || result?.testSpreadsheetConfirmed!==true || result?.productionWritesAllowed!==false)
+          return apiError(502,"TEST_BRIDGE_REJECTED","Test bridge rejected action.");
+        return json({ok:true,stage:"CF-013.10.1",mode:"REMOTE_TEST_ONLY",result:result.result,
+          testKvkId:result.testKvkId,productionWritesAllowed:false});
+      }catch(error){console.error("Remote test bridge failed",String(error?.name||"Error"));
+        return apiError(503,"TEST_BRIDGE_UNAVAILABLE","Test bridge temporarily unavailable.");}
+    }
+
     // CF-013.9.2: signed TEST-only ping. Never sends create/close or mutates data.
     if (url.pathname === "/api/v1/leadership/test-bridge/ping") {
       if (request.method !== "POST") return apiError(405, "METHOD_NOT_ALLOWED", "POST required.");
