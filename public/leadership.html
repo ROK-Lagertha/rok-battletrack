@@ -117,6 +117,15 @@ document.getElementById('btDiscordLogout').addEventListener('click', async () =>
    select.append(option)
   }
   window.BattleTrackLeadershipKvks=list;
+  // CF-013.4: Stories come exclusively from the signed, Officer+Data protected bridge.
+  window.BattleTrackLeadershipStories=Array.isArray(data.stories)?data.stories.filter(st=>st&&typeof st.name==='string'&&st.name.trim()):[];
+  window.BattleTrackLeadershipNext={number:Number(data.nextNumber)||null,id:String(data.nextKvkId||'')};
+  const storySelect=document.getElementById('btCreateStory');
+  if(storySelect){
+    storySelect.replaceChildren();
+    const placeholder=document.createElement('option');placeholder.value='';placeholder.textContent=window.BattleTrackLeadershipStories.length?'SELECT STORY':'No active stories available';storySelect.append(placeholder);
+    for(const story of window.BattleTrackLeadershipStories){const opt=document.createElement('option');opt.value=story.name;opt.textContent=story.name;storySelect.append(opt)}
+  }
   const active=list.filter(k=>String(k.status||'').toLowerCase()!=='historical').sort((a,b)=>Number(b.number)-Number(a.number))[0]||null;
   window.BattleTrackActiveKvk=active;
   byId('openKvkOverview').disabled=!active;
@@ -347,7 +356,7 @@ for(const e of [file,kvk,snap])e.addEventListener('change',display);
  <div class="bt-dlg-top"><div><div class="bt-kicker">KVK MANAGEMENT</div><h3 id="btCreateTitle">Add New KvK</h3></div><button type="button" class="bt-dlg-x" data-close="btCreateKvkDialog" aria-label="Close">✕</button></div>
  <p>BattleTrack determines the next KvK number independently of comparison selection. The planned end date is start + 50 days and remains editable.</p>
  <div class="bt-dlg-grid"><div class="bt-dlg-stat"><small>NEXT KVK</small><strong id="btNextKvkNumber">—</strong></div><div class="bt-dlg-stat"><small>KVK ID</small><strong id="btNextKvkId">—</strong></div></div>
- <label for="btCreateStory">KVK STORY</label><select id="btCreateStory"><option value="">Story Catalog pending secure backend connection</option></select>
+ <label for="btCreateStory">KVK STORY</label><select id="btCreateStory"><option value="">Loading Story Catalog…</option></select>
  <div class="bt-dlg-grid"><div><label for="btCreateStart">KVK START</label><input type="date" id="btCreateStart"></div><div><label for="btCreateEnd">KVK END (AUTO +50 DAYS · EDITABLE)</label><input type="date" id="btCreateEnd"></div></div>
  <div class="bt-dlg-notice">SEASON NAME<br><strong id="btCreateSeason">Select a story</strong></div>
  <button class="bt-dlg-primary" type="button" disabled title="A protected creation endpoint and verified Story Catalog are required">CREATE KVK · NOT YET AVAILABLE</button>
@@ -376,7 +385,12 @@ const open=id=>$(id).showModal();
 for(const btn of document.querySelectorAll('[data-close]'))btn.addEventListener('click',()=>$(btn.dataset.close).close());
 for(const dlg of document.querySelectorAll('.bt-leadership-dialog'))dlg.addEventListener('click',e=>{if(e.target===dlg)dlg.close()});
 const getKvks=()=>window.BattleTrackLeadershipKvks||[];
-$('btAddKvk').addEventListener('click',()=>{const list=getKvks(),next=Math.max(0,...list.map(x=>Number(x.number)||0))+1;$('btNextKvkNumber').textContent='KvK '+next;$('btNextKvkId').textContent='3903-KVK'+next;$('btCreateStory').value='';$('btCreateStart').value='';$('btCreateEnd').value='';$('btCreateSeason').textContent='Select a story';open('btCreateKvkDialog')});
+$('btCreateStory').addEventListener('change',()=>{
+ const selected=$('btCreateStory').value;
+ const story=(window.BattleTrackLeadershipStories||[]).find(item=>item.name===selected);
+ $('btCreateSeason').textContent=story?story.name:'Select a story';
+});
+$('btAddKvk').addEventListener('click',()=>{const list=getKvks(),next=Number(window.BattleTrackLeadershipNext?.number)||Math.max(0,...list.map(x=>Number(x.number)||0))+1;$('btNextKvkNumber').textContent='KvK '+next;$('btNextKvkId').textContent=window.BattleTrackLeadershipNext?.id||'3903-KVK'+next;$('btCreateStory').value='';$('btCreateStart').value='';$('btCreateEnd').value='';$('btCreateSeason').textContent='Select a story';open('btCreateKvkDialog')});
 $('btCreateStart').addEventListener('change',()=>{const value=$('btCreateStart').value;if(!value){$('btCreateEnd').value='';return}const date=new Date(value+'T00:00:00Z');date.setUTCDate(date.getUTCDate()+50);$('btCreateEnd').value=date.toISOString().slice(0,10)});
 $('btCloseKvk').addEventListener('click',()=>{const target=$('btCloseTarget');target.replaceChildren();const active=getKvks().filter(k=>String(k.status||'').toLowerCase()!=='historical');for(const k of active){const opt=document.createElement('option');opt.value=k.id;opt.textContent='KvK '+k.number+' · '+k.seasonName+' · ACTIVE';target.append(opt)}if(!active.length){const opt=document.createElement('option');opt.textContent='No active KvK available';target.append(opt)}open('btCloseKvkDialog')});
 $('btSelectComparisonKvk').addEventListener('click',()=>{const choice=$('btComparisonChoice');choice.replaceChildren();const empty=document.createElement('option');empty.value='';empty.textContent='SELECT KVK / SEASON';choice.append(empty);for(const k of getKvks()){const o=document.createElement('option');o.value=k.id;o.textContent='KvK '+k.number+' · '+k.seasonName+' · '+(String(k.status||'').toLowerCase()==='historical'?'HISTORICAL':'ACTIVE');choice.append(o)}choice.value=$('kvkSelect').value&&$('btComparisonActions').hidden===false?$('kvkSelect').value:'';choice.dispatchEvent(new Event('change'));open('btComparisonSelectorDialog')});
