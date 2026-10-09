@@ -203,6 +203,47 @@ export default {
       }
     }
 
+    // CF-013.9.2: signed TEST-only ping. Never sends create/close or mutates data.
+    if (url.pathname === "/api/v1/leadership/test-bridge/ping") {
+      if (request.method !== "POST") return apiError(405, "METHOD_NOT_ALLOWED", "POST required.");
+      try {
+        const sessionCheck = new Request(new URL("/api/auth/discord/me", request.url), {
+          method: "GET", headers: { cookie: request.headers.get("cookie") || "" }
+        });
+        const auth = await discordAuth(sessionCheck, env, "/api/auth/discord/me");
+        if (!auth.ok) return apiError(auth.status === 401 ? 401 : 403, "LEADERSHIP_ACCESS_DENIED", "Discord Officer and Data roles are required.");
+        const endpoint = String(env.BT_TEST_BRIDGE_URL || "").trim();
+        const secret = String(env.BT_TEST_BRIDGE_SECRET || "");
+        if (!endpoint || secret.length < 32) return apiError(503, "TEST_BRIDGE_NOT_CONFIGURED", "Test bridge is not configured yet.");
+        const target = new URL(endpoint);
+        if (target.protocol !== "https:" || target.hostname !== "script.google.com" || !/^\/macros\/s\/[A-Za-z0-9_-]+\/exec$/.test(target.pathname) || target.search || target.hash) {
+          return apiError(503, "TEST_BRIDGE_INVALID_URL", "Test bridge URL configuration is invalid.");
+        }
+        const timestamp = Date.now();
+        const bytes = crypto.getRandomValues(new Uint8Array(16));
+        const nonce = Array.from(bytes, b => b.toString(16).padStart(2, "0")).join("");
+        const action = "PING";
+        const message = `${timestamp}.${nonce}.${action}`;
+        const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+        const signature = Array.from(new Uint8Array(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(message))), b => b.toString(16).padStart(2, "0")).join("");
+        const upstream = await fetch(target.toString(), {
+          method: "POST", headers: { "content-type": "application/json" },
+          body: JSON.stringify({ timestamp, nonce, action, signature }), redirect: "follow",
+          signal: AbortSignal.timeout(12000)
+        });
+        const raw = await upstream.text();
+        let result;
+        try { result = JSON.parse(raw); } catch { return apiError(502, "TEST_BRIDGE_BAD_RESPONSE", "Test bridge returned an unexpected response."); }
+        if (!upstream.ok || result?.ok !== true || result?.mode !== "SIGNED_PING_ONLY" || result?.testSpreadsheetConfirmed !== true || result?.writesEnabled !== false || result?.productionWritesAllowed !== false) {
+          return apiError(502, "TEST_BRIDGE_REJECTED", "Test bridge did not confirm safe read-only mode.");
+        }
+        return json({ ok: true, stage: "CF-013.9.2", mode: "SIGNED_PING_ONLY", testSpreadsheetConfirmed: true, writesEnabled: false, productionWritesAllowed: false });
+      } catch (error) {
+        console.error("Test bridge ping failed", String(error?.name || "Error"));
+        return apiError(503, "TEST_BRIDGE_UNAVAILABLE", "Test bridge temporarily unavailable.");
+      }
+    }
+
     // CF-013.7: deploy-safe readiness contract for the future KvK write bridge.
     // This endpoint NEVER calls Apps Script and NEVER changes production data.
     if (url.pathname === "/api/v1/leadership/kvks/write-readiness") {
