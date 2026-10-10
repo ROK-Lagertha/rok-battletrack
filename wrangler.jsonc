@@ -11,8 +11,5 @@
   },
   "observability": {
     "enabled": true
-  },
-  "vars": {
-    "BT_TEST_BRIDGE_URL": "https://script.google.com/macros/s/AKfycbzanaRUpy1q4XZ1miP0wKvFLmPZggzluX61oIZwGqrcavJ4Aa5Rw5bnS6U0fUfVzcd5/exec"
   }
 }
