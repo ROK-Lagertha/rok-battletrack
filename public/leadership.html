@@ -168,6 +168,15 @@ document.getElementById('btDiscordLogout').addEventListener('click', async () =>
   <div class="ov-scroll" tabindex="0" role="region" aria-label="Governor overview table"><table><thead><tr><th>Governor</th><th>Start Power</th><th>KP</th><th>Kills</th><th>Deads</th><th>DKP</th><th>KPR</th><th>Kills Requirement</th><th>Deads Requirement</th><th>Overall</th><th>Status</th></tr></thead><tbody id="ovRows"></tbody></table></div>
  </div>
 </dialog>
+<dialog class="bt-leadership-dialog" id="btConfirmCloseDialog" aria-labelledby="btConfirmCloseTitle">
+ <div class="bt-dlg-top"><div><div class="bt-kicker">PRODUCTION DATABASE · FINAL CONFIRMATION</div><h3 id="btConfirmCloseTitle">Confirm KvK Closure</h3></div><button type="button" class="bt-dlg-x" id="btCancelCloseX" aria-label="Close">✕</button></div>
+ <p id="btConfirmCloseSummary"></p>
+ <p>This will close the selected KvK. The planned end date and historical statistics are preserved.</p>
+ <label for="btConfirmCloseText">TYPE EXACTLY: Close this KVK</label>
+ <input id="btConfirmCloseText" autocomplete="off" spellcheck="false" placeholder="Close this KVK">
+ <button class="bt-dlg-primary" id="btConfirmCloseSubmit" type="button" disabled>CONFIRM & CLOSE KVK</button>
+ <button type="button" class="bt-dlg-primary" id="btCancelClose" style="margin-top:8px">CANCEL · KEEP KVK OPEN</button>
+</dialog>
 <script>
 (()=>{'use strict';
  const $=id=>document.getElementById(id),dlg=$('btOverviewDialog');let current=null,requestNo=0;
@@ -210,6 +219,15 @@ document.getElementById('btDiscordLogout').addEventListener('click', async () =>
 <div id="btScanReport" class="scan-report" role="status">No file selected. Nothing has been uploaded or saved.</div>
 <div id="btScanValidation" class="scan-report" hidden aria-live="polite"></div>
 <div class="scan-actions"><button type="button" id="btScanClose">CLOSE</button></div>
+</dialog>
+<dialog class="bt-leadership-dialog" id="btConfirmCloseDialog" aria-labelledby="btConfirmCloseTitle">
+ <div class="bt-dlg-top"><div><div class="bt-kicker">PRODUCTION DATABASE · FINAL CONFIRMATION</div><h3 id="btConfirmCloseTitle">Confirm KvK Closure</h3></div><button type="button" class="bt-dlg-x" id="btCancelCloseX" aria-label="Close">✕</button></div>
+ <p id="btConfirmCloseSummary"></p>
+ <p>This will close the selected KvK. The planned end date and historical statistics are preserved.</p>
+ <label for="btConfirmCloseText">TYPE EXACTLY: Close this KVK</label>
+ <input id="btConfirmCloseText" autocomplete="off" spellcheck="false" placeholder="Close this KVK">
+ <button class="bt-dlg-primary" id="btConfirmCloseSubmit" type="button" disabled>CONFIRM & CLOSE KVK</button>
+ <button type="button" class="bt-dlg-primary" id="btCancelClose" style="margin-top:8px">CANCEL · KEEP KVK OPEN</button>
 </dialog>
 <script>
 (()=>{'use strict';
@@ -383,7 +401,22 @@ for(const e of [file,kvk,snap])e.addEventListener('change',display);
  <p>Closing a KvK is independent of Comparison. Only active KvKs are eligible for review.</p>
  <label for="btCloseTarget">ACTIVE KVK</label><select id="btCloseTarget"></select>
  <div class="bt-dlg-notice">Closing a KvK is a permanent administrative operation. This preview does not change the database.</div>
- <label for="btCloseResult">KVK RESULT</label><select id="btCloseResult"><option value="">SELECT RESULT</option><option value="WIN">WIN</option><option value="LOST">LOST</option><option value="MANUAL">MANUAL / EARLY END</option></select><label for="btCloseDate">ACTUAL END DATE</label><input id="btCloseDate" type="date"><button class="bt-dlg-primary" id="btValidateClose" type="button">VALIDATE CLOSURE · NO WRITE</button><p id="btCloseValidation" class="bt-validation-message" role="status" aria-live="polite">Select an active KvK, result and end date to validate.</p><button class="bt-dlg-primary" type="button" disabled>CLOSE KVK · NOT YET AVAILABLE</button>
+ <label for="btCloseResult">KVK RESULT</label><select id="btCloseResult"><option value="">SELECT RESULT</option><option value="WIN">WIN</option><option value="LOST">LOST</option><option value="MANUAL">MANUAL / EARLY END</option></select>
+ <label for="btCloseDate">ACTUAL END DATE</label><input id="btCloseDate" type="date">
+ <fieldset id="btCloseTags" style="border:1px solid rgba(180,192,218,.3);border-radius:10px;padding:13px;margin:16px 0">
+ <legend style="padding:0 7px;font-weight:700;font-size:12px;letter-spacing:.06em">CLOSURE TAGS · MULTIPLE ALLOWED</legend>
+ <label style="display:flex;gap:9px;align-items:center;margin:7px 0"><input type="checkbox" value="WITH_STAR" style="width:auto"> WITH STAR</label>
+ <label style="display:flex;gap:9px;align-items:center;margin:7px 0"><input type="checkbox" value="WITHOUT_STAR" style="width:auto"> WITHOUT STAR</label>
+ <label style="display:flex;gap:9px;align-items:center;margin:7px 0"><input type="checkbox" value="ALLY_SURRENDERED" style="width:auto"> ALLY SURRENDERED</label>
+ <label style="display:flex;gap:9px;align-items:center;margin:7px 0"><input type="checkbox" value="SURRENDERED" style="width:auto"> SURRENDERED</label>
+ <small>WITH STAR and WITHOUT STAR cannot be selected together.</small></fieldset>
+ <label for="btCloseNotes">CLOSURE NOTES · OPTIONAL</label>
+ <textarea id="btCloseNotes" maxlength="2000" rows="3" placeholder="Leadership decision, circumstances, next steps…" style="width:100%;box-sizing:border-box;border-radius:9px;padding:10px;background:transparent;color:inherit"></textarea>
+ <small id="btCloseNotesCount">0 / 2000 characters</small>
+ <button class="bt-dlg-primary" id="btValidateClose" type="button">VALIDATE CLOSURE · NO WRITE</button>
+ <p id="btCloseValidation" class="bt-validation-message" role="status" aria-live="polite">Select an active KvK, result and end date to validate.</p>
+ <button class="bt-dlg-primary" id="btSubmitClose" type="button" disabled>CLOSE KVK · LOCKED</button>
+ <div class="bt-dlg-footer">PHASE C · CLOSE remains locked. Validation never writes to the database.</div>
  <div class="bt-dlg-footer">PROTECTED ACTION · Requires verified write API, confirmation and audit logging.</div>
 </dialog>
 <dialog class="bt-leadership-dialog" id="btComparisonSelectorDialog" aria-labelledby="btSelectorTitle">
@@ -393,6 +426,15 @@ for(const e of [file,kvk,snap])e.addEventListener('change',display);
  <div class="bt-dlg-grid" style="margin-top:15px"><div class="bt-dlg-stat"><small>KVK</small><strong id="btSelectorKvk">—</strong></div><div class="bt-dlg-stat"><small>STATUS</small><strong id="btSelectorStatus">—</strong></div><div class="bt-dlg-stat"><small>COMPARISON</small><strong id="btSelectorMode">—</strong></div><div class="bt-dlg-stat"><small>WINDOW</small><strong id="btSelectorWindow">—</strong></div></div>
  <button type="button" class="bt-dlg-primary" id="btUseComparisonChoice" disabled>USE SELECTED KVK</button>
  <div class="bt-dlg-footer">COMPARISON MODE · Read-only. No database changes. CSV is generated locally.</div>
+</dialog>
+<dialog class="bt-leadership-dialog" id="btConfirmCloseDialog" aria-labelledby="btConfirmCloseTitle">
+ <div class="bt-dlg-top"><div><div class="bt-kicker">PRODUCTION DATABASE · FINAL CONFIRMATION</div><h3 id="btConfirmCloseTitle">Confirm KvK Closure</h3></div><button type="button" class="bt-dlg-x" id="btCancelCloseX" aria-label="Close">✕</button></div>
+ <p id="btConfirmCloseSummary"></p>
+ <p>This will close the selected KvK. The planned end date and historical statistics are preserved.</p>
+ <label for="btConfirmCloseText">TYPE EXACTLY: Close this KVK</label>
+ <input id="btConfirmCloseText" autocomplete="off" spellcheck="false" placeholder="Close this KVK">
+ <button class="bt-dlg-primary" id="btConfirmCloseSubmit" type="button" disabled>CONFIRM & CLOSE KVK</button>
+ <button type="button" class="bt-dlg-primary" id="btCancelClose" style="margin-top:8px">CANCEL · KEEP KVK OPEN</button>
 </dialog>
 <script>
 (()=>{'use strict';
@@ -423,13 +465,41 @@ async function checkCreateReadiness(){
  syncCreateButton();
 }
 const validationSerial={create:0,close:0};
+const closeState={validated:null,ready:false,busy:false,requestId:null};
+const closeTags=()=>Array.from(document.querySelectorAll('#btCloseTags input:checked')).map(el=>el.value);
+const closePayload=()=>({kvkId:$('btCloseTarget').value,result:$('btCloseResult').value,actualEndDate:$('btCloseDate').value,tags:closeTags(),notes:$('btCloseNotes').value});
+const closeFingerprint=()=>JSON.stringify(closePayload());
+function syncCloseButton(){
+ const allowed=closeState.ready&&!closeState.busy&&closeState.validated===closeFingerprint();
+ $('btSubmitClose').disabled=!allowed;
+ $('btSubmitClose').textContent=closeState.busy?'CLOSING KVK…':allowed?'CLOSE KVK · CONFIRM REQUIRED':'CLOSE KVK · LOCKED';
+}
+async function checkCloseReadiness(){
+ closeState.ready=false;syncCloseButton();
+ try{
+  const response=await fetch('/api/v1/leadership/kvks/write-readiness',{credentials:'same-origin',cache:'no-store'});
+  const data=await response.json();
+  closeState.ready=response.ok&&data.ok===true&&data.closeEnabled===true;
+ }catch(_error){closeState.ready=false;}
+ syncCloseButton();
+}
+$('btCloseTags').addEventListener('change',event=>{
+ if(event.target.checked&&event.target.value==='WITH_STAR')
+  document.querySelector('#btCloseTags input[value="WITHOUT_STAR"]').checked=false;
+ if(event.target.checked&&event.target.value==='WITHOUT_STAR')
+  document.querySelector('#btCloseTags input[value="WITH_STAR"]').checked=false;
+ invalidatePreflight('close');
+});
+$('btCloseNotes').addEventListener('input',()=>{$('btCloseNotesCount').textContent=$('btCloseNotes').value.length+' / 2000 characters';});
+
 const validationInputs={
  create:['btCreateStory','btCreateStart','btCreateEnd'],
- close:['btCloseTarget','btCloseResult','btCloseDate']
+ close:['btCloseTarget','btCloseResult','btCloseDate','btCloseNotes']
 };
 function invalidatePreflight(type){
  validationSerial[type]++;
  if(type==='create'){createState.validated=null;createState.requestId=null;syncCreateButton();}
+ if(type==='close'){closeState.validated=null;closeState.requestId=null;syncCloseButton();}
  const output=$(type==='create'?'btCreateValidation':'btCloseValidation');
  output.dataset.state='';
  output.textContent='Inputs changed · validate again before proceeding. NO DATA WRITTEN.';
@@ -458,6 +528,11 @@ async function runKvkPreflight(type, payload, outputId){
    const expected=createFingerprint(payload);
    if(expected===createFingerprint(createPayload()))createState.validated=expected;
    syncCreateButton();
+  }else{
+   const expected=closeFingerprint();
+   if(payload.kvkId===closePayload().kvkId&&payload.result===closePayload().result&&payload.actualEndDate===closePayload().actualEndDate)
+    closeState.validated=expected;
+   syncCloseButton();
   }
   output.textContent=type==='create'
    ?'VALIDATED · '+data.kvkId+' · '+data.seasonName+' · '+data.startDate+' → '+data.endDate+' · NO DATA WRITTEN'
@@ -530,9 +605,50 @@ $('btValidateCreate').addEventListener('click',()=>{
 $('btValidateClose').addEventListener('click',()=>{
  const kvkId=$('btCloseTarget').value,result=$('btCloseResult').value,actualEndDate=$('btCloseDate').value;
  if(!getKvks().some(k=>k.id===kvkId)||!result||!actualEndDate){$('btCloseValidation').dataset.state='error';$('btCloseValidation').textContent='Choose an active KvK, result and end date first.';return}
+ const payload=closePayload();
+ if(payload.tags.includes('WITH_STAR')&&payload.tags.includes('WITHOUT_STAR')){
+  $('btCloseValidation').dataset.state='error';$('btCloseValidation').textContent='Choose WITH STAR or WITHOUT STAR, not both.';return;
+ }
  runKvkPreflight('close',{kvkId,result,actualEndDate},'btCloseValidation');
 });
 
+// Phase C: typed CLOSE confirmation. Locked until the independent CLOSE gate is enabled.
+let pendingClose=null;
+const closeConfirm=$('btConfirmCloseDialog'),closeConfirmText=$('btConfirmCloseText'),closeConfirmSubmit=$('btConfirmCloseSubmit');
+function cancelCloseConfirmation(){pendingClose=null;closeConfirmText.value='';closeConfirmSubmit.disabled=true;if(closeConfirm.open)closeConfirm.close();}
+$('btCancelClose').addEventListener('click',cancelCloseConfirmation);
+$('btCancelCloseX').addEventListener('click',cancelCloseConfirmation);
+closeConfirm.addEventListener('close',()=>{pendingClose=null;closeConfirmText.value='';closeConfirmSubmit.disabled=true;});
+closeConfirmText.addEventListener('input',()=>{closeConfirmSubmit.disabled=closeConfirmText.value!=='Close this KVK'||!pendingClose||closeState.busy;});
+$('btSubmitClose').addEventListener('click',async()=>{
+ const payload=closePayload(),fingerprint=closeFingerprint();
+ if(closeState.busy||!closeState.ready||closeState.validated!==fingerprint)return;
+ await checkCloseReadiness();
+ if(!closeState.ready||closeState.validated!==fingerprint||closeFingerprint()!==fingerprint)return;
+ pendingClose={payload,fingerprint};
+ $('btConfirmCloseSummary').textContent='KvK: '+payload.kvkId+' | Result: '+payload.result+' | End: '+payload.actualEndDate+' | Tags: '+(payload.tags.join(', ')||'none');
+ closeConfirmText.value='';closeConfirmSubmit.disabled=true;closeConfirm.showModal();closeConfirmText.focus();
+});
+closeConfirmSubmit.addEventListener('click',async()=>{
+ if(!pendingClose||closeConfirmText.value!=='Close this KVK'||closeState.busy)return;
+ const {payload,fingerprint}=pendingClose;
+ if(closeState.validated!==fingerprint||closeFingerprint()!==fingerprint){cancelCloseConfirmation();return;}
+ closeState.busy=true;syncCloseButton();closeConfirmSubmit.disabled=true;
+ if(!closeState.requestId)closeState.requestId=crypto.randomUUID();
+ const output=$('btCloseValidation');
+ try{
+  const readyResponse=await fetch('/api/v1/leadership/kvks/write-readiness',{credentials:'same-origin',cache:'no-store'});
+  const readyData=await readyResponse.json();
+  if(!readyResponse.ok||readyData.ok!==true||readyData.closeEnabled!==true)throw Error('Production CLOSE is disabled. No KvK was closed.');
+  if(closeFingerprint()!==fingerprint)throw Error('Inputs changed. Validate again.');
+  const response=await fetch('/api/v1/leadership/kvks/close',{method:'POST',credentials:'same-origin',cache:'no-store',headers:{'content-type':'application/json'},body:JSON.stringify({...payload,requestId:closeState.requestId,confirm:'CONFIRM_PRODUCTION_KVK_CLOSE'})});
+  const data=await response.json();
+  if(!response.ok||data.ok!==true)throw Error(data.message||'CLOSE status uncertain. Review production audit before retrying.');
+  output.dataset.state='ok';output.textContent='CLOSED · '+payload.kvkId+' · Refresh Leadership to see the updated status.';
+  closeState.validated=null;closeState.ready=false;closeState.requestId=null;
+ }catch(error){output.dataset.state='error';output.textContent=error.message||'CLOSE status uncertain. Check production audit.';}
+ finally{closeState.busy=false;cancelCloseConfirmation();syncCloseButton();}
+});
 $('btCreateStory').addEventListener('change',()=>{
  const selected=$('btCreateStory').value;
  const story=(window.BattleTrackLeadershipStories||[]).find(item=>item.name===selected);
@@ -540,7 +656,7 @@ $('btCreateStory').addEventListener('change',()=>{
 });
 $('btAddKvk').addEventListener('click',()=>{invalidatePreflight('create');const list=getKvks(),next=Number(window.BattleTrackLeadershipNext?.number)||Math.max(0,...list.map(x=>Number(x.number)||0))+1;$('btNextKvkNumber').textContent='KvK '+next;$('btNextKvkId').textContent=window.BattleTrackLeadershipNext?.id||'3903-KVK'+next;$('btCreateStory').value='';$('btCreateStart').value='';$('btCreateEnd').value='';$('btCreateSeason').textContent='Select a story';$('btCreateValidation').dataset.state='';$('btCreateValidation').textContent='Choose a story and dates to run a secure preflight check.';open('btCreateKvkDialog');checkCreateReadiness()});
 $('btCreateStart').addEventListener('change',()=>{const value=$('btCreateStart').value;if(!value){$('btCreateEnd').value='';return}const date=new Date(value+'T00:00:00Z');date.setUTCDate(date.getUTCDate()+50);$('btCreateEnd').value=date.toISOString().slice(0,10)});
-$('btCloseKvk').addEventListener('click',()=>{invalidatePreflight('close');const target=$('btCloseTarget');target.replaceChildren();const active=getKvks().filter(k=>String(k.status||'').toLowerCase()!=='historical');for(const k of active){const opt=document.createElement('option');opt.value=k.id;opt.textContent='KvK '+k.number+' · '+k.seasonName+' · ACTIVE';target.append(opt)}if(!active.length){const opt=document.createElement('option');opt.textContent='No active KvK available';target.append(opt)}$('btCloseResult').value='';$('btCloseDate').value='';$('btCloseValidation').dataset.state='';$('btCloseValidation').textContent=active.length?'Select an active KvK, result and end date to validate.':'No active KvK: closure validation is unavailable.';$('btValidateClose').disabled=!active.length;open('btCloseKvkDialog')});
+$('btCloseKvk').addEventListener('click',()=>{invalidatePreflight('close');const target=$('btCloseTarget');target.replaceChildren();const active=getKvks().filter(k=>!['historical','completed','closed'].includes(String(k.status||'').toLowerCase()));for(const k of active){const opt=document.createElement('option');opt.value=k.id;opt.textContent='KvK '+k.number+' · '+k.seasonName+' · ACTIVE';target.append(opt)}if(!active.length){const opt=document.createElement('option');opt.textContent='No active KvK available';target.append(opt)}$('btCloseResult').value='';$('btCloseDate').value='';$('btCloseNotes').value='';$('btCloseNotesCount').textContent='0 / 2000 characters';document.querySelectorAll('#btCloseTags input').forEach(el=>el.checked=false);closeState.validated=null;$('btCloseValidation').dataset.state='';$('btCloseValidation').textContent=active.length?'Select an active KvK, result and end date to validate.':'No active KvK: closure validation is unavailable.';$('btValidateClose').disabled=!active.length;open('btCloseKvkDialog');checkCloseReadiness()});
 $('btSelectComparisonKvk').addEventListener('click',()=>{const choice=$('btComparisonChoice');choice.replaceChildren();const empty=document.createElement('option');empty.value='';empty.textContent='SELECT KVK / SEASON';choice.append(empty);for(const k of getKvks()){const o=document.createElement('option');o.value=k.id;o.textContent='KvK '+k.number+' · '+k.seasonName+' · '+(String(k.status||'').toLowerCase()==='historical'?'HISTORICAL':'ACTIVE');choice.append(o)}choice.value=$('kvkSelect').value&&$('btComparisonActions').hidden===false?$('kvkSelect').value:'';choice.dispatchEvent(new Event('change'));open('btComparisonSelectorDialog')});
 $('btComparisonChoice').addEventListener('change',()=>{const k=getKvks().find(x=>x.id===$('btComparisonChoice').value);const historical=String(k?.status||'').toLowerCase()==='historical';$('btSelectorKvk').textContent=k?.id||'—';$('btSelectorStatus').textContent=k?(historical?'HISTORICAL':'ACTIVE'):'—';$('btSelectorMode').textContent=k?(historical?'START → END':'START → LATEST'):'—';$('btSelectorWindow').textContent=k?((k.startDate||'START')+' → '+(historical?(k.endDate||'END'):'LATEST')):'—';$('btUseComparisonChoice').disabled=!k});
 $('btUseComparisonChoice').addEventListener('click',()=>{const id=$('btComparisonChoice').value;if(!getKvks().some(k=>k.id===id))return;const k=getKvks().find(k=>k.id===id);$('kvkSelect').value=id;$('kvkSelect').dispatchEvent(new Event('change'));$('comparisonResults').hidden=true;$('comparisonRows').replaceChildren();$('exportComparison').disabled=true;$('btComparisonActions').hidden=false;$('comparisonContext').hidden=false;$('comparisonState').hidden=false;$('comparisonContext').textContent='Comparison source: '+id+' · '+(String(k.status||'').toLowerCase()==='historical'?'START → END':'START → LATEST');$('comparisonState').textContent='Ready to load comparison for '+id+'.';$('loadComparison').disabled=false;$('btComparisonSelectorDialog').close()});
