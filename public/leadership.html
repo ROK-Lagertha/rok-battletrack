@@ -366,8 +366,8 @@ for(const e of [file,kvk,snap])e.addEventListener('change',display);
  <label for="btCreateStory">KVK STORY</label><select id="btCreateStory"><option value="">Loading Story Catalog…</option></select>
  <div class="bt-dlg-grid"><div><label for="btCreateStart">KVK START</label><input type="date" id="btCreateStart"></div><div><label for="btCreateEnd">KVK END (AUTO +50 DAYS · EDITABLE)</label><input type="date" id="btCreateEnd"></div></div>
  <div class="bt-dlg-notice">SEASON NAME<br><strong id="btCreateSeason">Select a story</strong></div>
- <button class="bt-dlg-primary" id="btValidateCreate" type="button">VALIDATE KVK · NO WRITE</button><p id="btCreateValidation" class="bt-validation-message" role="status" aria-live="polite">Choose a story and dates to run a secure preflight check.</p><button class="bt-dlg-primary" type="button" disabled>CREATE KVK · NOT YET AVAILABLE</button>
- <div class="bt-dlg-footer">SAFE PREVIEW ONLY · No KvK created. The Story Catalog and production write endpoint must be migrated and authorized first.</div>
+ <button class="bt-dlg-primary" id="btValidateCreate" type="button">VALIDATE KVK · NO WRITE</button><p id="btCreateValidation" class="bt-validation-message" role="status" aria-live="polite">Choose a story and dates to run a secure preflight check.</p><button class="bt-dlg-primary" id="btSubmitCreate" type="button" disabled>CREATE KVK · LOCKED</button>
+ <div class="bt-dlg-footer">PRODUCTION SAFETY · CREATE requires a valid preflight, server-side readiness and explicit confirmation. Currently locked.</div>
 </dialog>
 <dialog class="bt-leadership-dialog" id="btCloseKvkDialog" aria-labelledby="btCloseTitle">
  <div class="bt-dlg-top"><div><div class="bt-kicker">KVK MANAGEMENT</div><h3 id="btCloseTitle">Close KvK</h3></div><button type="button" class="bt-dlg-x" data-close="btCloseKvkDialog" aria-label="Close">✕</button></div>
@@ -392,8 +392,27 @@ const open=id=>$(id).showModal();
 for(const btn of document.querySelectorAll('[data-close]'))btn.addEventListener('click',()=>$(btn.dataset.close).close());
 for(const dlg of document.querySelectorAll('.bt-leadership-dialog'))dlg.addEventListener('click',e=>{if(e.target===dlg)dlg.close()});
 const getKvks=()=>window.BattleTrackLeadershipKvks||[];
-// CF-013.5.2: preflight-only. These buttons never call any write endpoint.
+// CF-014.2 Phase C: server-gated CREATE UI. No writes while readiness reports disabled.
 // CF-013.6.3: a validation belongs only to the exact form values checked.
+const createState={validated:null,ready:false,busy:false,requestId:null};
+function createPayload(){return {story:$('btCreateStory').value,startDate:$('btCreateStart').value,endDate:$('btCreateEnd').value};}
+function createFingerprint(payload){return JSON.stringify(payload);}
+function syncCreateButton(){
+ const button=$('btSubmitCreate');
+ const allowed=createState.ready && !createState.busy && createState.validated===createFingerprint(createPayload());
+ button.disabled=!allowed;
+ button.textContent=createState.busy?'CREATING KVK…':allowed?'CREATE KVK · CONFIRM REQUIRED':'CREATE KVK · LOCKED';
+}
+async function checkCreateReadiness(){
+ createState.ready=false;syncCreateButton();
+ try{
+  const response=await fetch('/api/v1/leadership/kvks/write-readiness',{credentials:'same-origin',cache:'no-store'});
+  const data=await response.json();
+  // Require all independent readiness flags; never trust client-side configuration alone.
+  createState.ready=response.ok && data.ok===true && data.createEnabled===true && data.writesEnabled===true && data.productionWritesAllowed===true;
+ }catch(_error){createState.ready=false;}
+ syncCreateButton();
+}
 const validationSerial={create:0,close:0};
 const validationInputs={
  create:['btCreateStory','btCreateStart','btCreateEnd'],
@@ -401,6 +420,7 @@ const validationInputs={
 };
 function invalidatePreflight(type){
  validationSerial[type]++;
+ if(type==='create'){createState.validated=null;createState.requestId=null;syncCreateButton();}
  const output=$(type==='create'?'btCreateValidation':'btCloseValidation');
  output.dataset.state='';
  output.textContent='Inputs changed · validate again before proceeding. NO DATA WRITTEN.';
@@ -425,12 +445,42 @@ async function runKvkPreflight(type, payload, outputId){
   if(!response.ok||!data.ok)throw Error(data.message||'Validation failed (HTTP '+response.status+').');
   if(data.mode!=='VALIDATION_ONLY'||data.writesEnabled!==false)throw Error('Unexpected validation response. No action taken.');
   output.dataset.state='ok';
+  if(type==='create'){
+   const expected=createFingerprint(payload);
+   if(expected===createFingerprint(createPayload()))createState.validated=expected;
+   syncCreateButton();
+  }
   output.textContent=type==='create'
    ?'VALIDATED · '+data.kvkId+' · '+data.seasonName+' · '+data.startDate+' → '+data.endDate+' · NO DATA WRITTEN'
    :'VALIDATED · '+data.kvkId+' · '+data.result+' · '+data.actualEndDate+' · NO DATA WRITTEN';
  }catch(error){if(serial===validationSerial[type]){output.dataset.state='error';output.textContent='Not validated: '+error.message}}
  finally{button.disabled=false}
 }
+$('btSubmitCreate').addEventListener('click',async()=>{
+ const button=$('btSubmitCreate'),output=$('btCreateValidation');
+ const payload=createPayload(),fingerprint=createFingerprint(payload);
+ if(createState.busy || !createState.ready || createState.validated!==fingerprint){syncCreateButton();return;}
+ const expectedId=$('btNextKvkId').textContent.trim();
+ if(!window.confirm('CREATE PRODUCTION KVK '+expectedId+'?\n\nStory: '+payload.story+'\nStart: '+payload.startDate+'\nEnd: '+payload.endDate+'\n\nThis writes to the LIVE database and cannot be undone automatically.'))return;
+ if(createFingerprint(createPayload())!==fingerprint)return;
+ createState.busy=true;syncCreateButton();
+ if(!createState.requestId)createState.requestId=crypto.randomUUID();
+ try{
+  const response=await fetch('/api/v1/leadership/kvks/create',{
+   method:'POST',credentials:'same-origin',cache:'no-store',
+   headers:{'content-type':'application/json'},
+   body:JSON.stringify({...payload,requestId:createState.requestId,confirm:'CONFIRM_PRODUCTION_KVK_CREATE'})
+  });
+  const data=await response.json();
+  if(!response.ok||data.ok!==true){
+   if(response.status===423){createState.ready=false;throw Error('Production CREATE remains locked. No KvK was created.');}
+   throw Error(data.message||'CREATE status not confirmed. Check the database before retrying.');
+  }
+  output.dataset.state='ok';output.textContent='CREATED · '+String(data.kvk?.kvkId||expectedId)+' · Refresh Leadership to see the new KvK.';
+  createState.validated=null;createState.ready=false;
+ }catch(error){output.dataset.state='error';output.textContent=error.message||'CREATE status uncertain. Check the database before retrying.';}
+ finally{createState.busy=false;syncCreateButton();}
+});
 $('btValidateCreate').addEventListener('click',()=>{
  const story=$('btCreateStory').value,startDate=$('btCreateStart').value,endDate=$('btCreateEnd').value;
  if(!story||!startDate||!endDate){$('btCreateValidation').dataset.state='error';$('btCreateValidation').textContent='Choose a story, start date and end date first.';return}
@@ -447,7 +497,7 @@ $('btCreateStory').addEventListener('change',()=>{
  const story=(window.BattleTrackLeadershipStories||[]).find(item=>item.name===selected);
  $('btCreateSeason').textContent=story?story.name:'Select a story';
 });
-$('btAddKvk').addEventListener('click',()=>{invalidatePreflight('create');const list=getKvks(),next=Number(window.BattleTrackLeadershipNext?.number)||Math.max(0,...list.map(x=>Number(x.number)||0))+1;$('btNextKvkNumber').textContent='KvK '+next;$('btNextKvkId').textContent=window.BattleTrackLeadershipNext?.id||'3903-KVK'+next;$('btCreateStory').value='';$('btCreateStart').value='';$('btCreateEnd').value='';$('btCreateSeason').textContent='Select a story';$('btCreateValidation').dataset.state='';$('btCreateValidation').textContent='Choose a story and dates to run a secure preflight check.';open('btCreateKvkDialog')});
+$('btAddKvk').addEventListener('click',()=>{invalidatePreflight('create');const list=getKvks(),next=Number(window.BattleTrackLeadershipNext?.number)||Math.max(0,...list.map(x=>Number(x.number)||0))+1;$('btNextKvkNumber').textContent='KvK '+next;$('btNextKvkId').textContent=window.BattleTrackLeadershipNext?.id||'3903-KVK'+next;$('btCreateStory').value='';$('btCreateStart').value='';$('btCreateEnd').value='';$('btCreateSeason').textContent='Select a story';$('btCreateValidation').dataset.state='';$('btCreateValidation').textContent='Choose a story and dates to run a secure preflight check.';open('btCreateKvkDialog');checkCreateReadiness()});
 $('btCreateStart').addEventListener('change',()=>{const value=$('btCreateStart').value;if(!value){$('btCreateEnd').value='';return}const date=new Date(value+'T00:00:00Z');date.setUTCDate(date.getUTCDate()+50);$('btCreateEnd').value=date.toISOString().slice(0,10)});
 $('btCloseKvk').addEventListener('click',()=>{invalidatePreflight('close');const target=$('btCloseTarget');target.replaceChildren();const active=getKvks().filter(k=>String(k.status||'').toLowerCase()!=='historical');for(const k of active){const opt=document.createElement('option');opt.value=k.id;opt.textContent='KvK '+k.number+' · '+k.seasonName+' · ACTIVE';target.append(opt)}if(!active.length){const opt=document.createElement('option');opt.textContent='No active KvK available';target.append(opt)}$('btCloseResult').value='';$('btCloseDate').value='';$('btCloseValidation').dataset.state='';$('btCloseValidation').textContent=active.length?'Select an active KvK, result and end date to validate.':'No active KvK: closure validation is unavailable.';$('btValidateClose').disabled=!active.length;open('btCloseKvkDialog')});
 $('btSelectComparisonKvk').addEventListener('click',()=>{const choice=$('btComparisonChoice');choice.replaceChildren();const empty=document.createElement('option');empty.value='';empty.textContent='SELECT KVK / SEASON';choice.append(empty);for(const k of getKvks()){const o=document.createElement('option');o.value=k.id;o.textContent='KvK '+k.number+' · '+k.seasonName+' · '+(String(k.status||'').toLowerCase()==='historical'?'HISTORICAL':'ACTIVE');choice.append(o)}choice.value=$('kvkSelect').value&&$('btComparisonActions').hidden===false?$('kvkSelect').value:'';choice.dispatchEvent(new Event('change'));open('btComparisonSelectorDialog')});
