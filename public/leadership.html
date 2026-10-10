@@ -32,7 +32,7 @@ body{background:#0d101b;color:#eee;font-family:system-ui,sans-serif}
 <article class="admin-module-card">
 <h4>KvK Management</h4>
 <p>Create the next KvK or close an existing one. Each action has its own workflow.</p>
-<div class="admin-module-actions"><button id="btAddKvk" type="button">ADD NEW KVK</button><button id="btCloseKvk" type="button" class="bt-outline-danger">CLOSE KVK</button></div>
+<div class="admin-module-actions"><button id="btAddKvk" type="button">ADD NEW KVK</button><button id="btCloseKvk" type="button" class="bt-outline-danger">CLOSE KVK</button><button id="btReopenKvk" type="button" style="border:1px solid #3f9d91;color:#a3f2e4;background:#12433f">RE-OPEN KVK</button></div>
 <small>Create or safely close a tracked KvK</small>
 <p id="status" role="status" hidden>Checking Leadership authorization…</p></article>
 <article class="admin-module-card">
@@ -419,6 +419,19 @@ for(const e of [file,kvk,snap])e.addEventListener('change',display);
  <div class="bt-dlg-footer">PHASE C · CLOSE remains locked. Validation never writes to the database.</div>
  <div class="bt-dlg-footer">PROTECTED ACTION · Requires verified write API, confirmation and audit logging.</div>
 </dialog>
+<dialog class="bt-leadership-dialog" id="btReopenKvkDialog" aria-labelledby="btReopenTitle">
+ <div class="bt-dlg-top"><div><div class="bt-kicker">KVK MANAGEMENT · CF-014.5 PHASE C</div><h3 id="btReopenTitle">Re-open KvK</h3></div><button type="button" class="bt-dlg-x" data-close="btReopenKvkDialog" aria-label="Close">✕</button></div>
+ <p>Only KvKs closed early may be re-opened before their original planned end date. Historical and completed KvKs remain protected.</p>
+ <label for="btReopenTarget">CLOSED KVK · CANDIDATE</label><select id="btReopenTarget"></select>
+ <div class="bt-dlg-notice">Candidate selection is informational. The signed backend must independently verify early closure, original end date and audit history.</div>
+ <label for="btReopenReason">RE-OPEN REASON · REQUIRED</label>
+ <textarea id="btReopenReason" rows="4" maxlength="2000" placeholder="Explain why leadership is re-opening this KvK…" style="width:100%;box-sizing:border-box;border-radius:9px;padding:10px;background:transparent;color:inherit"></textarea>
+ <label for="btReopenConfirmation">TYPE EXACTLY: Reopen this KVK</label><input id="btReopenConfirmation" autocomplete="off" spellcheck="false" placeholder="Reopen this KVK">
+ <button class="bt-dlg-primary" id="btValidateReopen" type="button">CHECK ELIGIBILITY · NO WRITE</button>
+ <p id="btReopenValidation" class="bt-validation-message" role="status" aria-live="polite">RE-OPEN is locked. No database changes will be made.</p>
+ <button class="bt-dlg-primary" id="btSubmitReopen" type="button" disabled>RE-OPEN KVK · LOCKED</button>
+ <div class="bt-dlg-footer">PHASE C · UI ONLY · RE-OPEN remains locked. No write requests are sent.</div>
+</dialog>
 <dialog class="bt-leadership-dialog" id="btComparisonSelectorDialog" aria-labelledby="btSelectorTitle">
  <div class="bt-dlg-top"><div><div class="bt-kicker">LEADERSHIP KVK SELECTOR</div><h3 id="btSelectorTitle">Select KvK</h3></div><button type="button" class="bt-dlg-x" data-close="btComparisonSelectorDialog" aria-label="Close">✕</button></div>
  <p>Choose a tracked KvK. Historical seasons use START → END; active seasons use START → LATEST.</p>
@@ -657,6 +670,34 @@ $('btCreateStory').addEventListener('change',()=>{
 $('btAddKvk').addEventListener('click',()=>{invalidatePreflight('create');const list=getKvks(),next=Number(window.BattleTrackLeadershipNext?.number)||Math.max(0,...list.map(x=>Number(x.number)||0))+1;$('btNextKvkNumber').textContent='KvK '+next;$('btNextKvkId').textContent=window.BattleTrackLeadershipNext?.id||'3903-KVK'+next;$('btCreateStory').value='';$('btCreateStart').value='';$('btCreateEnd').value='';$('btCreateSeason').textContent='Select a story';$('btCreateValidation').dataset.state='';$('btCreateValidation').textContent='Choose a story and dates to run a secure preflight check.';open('btCreateKvkDialog');checkCreateReadiness()});
 $('btCreateStart').addEventListener('change',()=>{const value=$('btCreateStart').value;if(!value){$('btCreateEnd').value='';return}const date=new Date(value+'T00:00:00Z');date.setUTCDate(date.getUTCDate()+50);$('btCreateEnd').value=date.toISOString().slice(0,10)});
 $('btCloseKvk').addEventListener('click',()=>{invalidatePreflight('close');const target=$('btCloseTarget');target.replaceChildren();const active=getKvks().filter(k=>!['historical','completed','closed'].includes(String(k.status||'').toLowerCase()));for(const k of active){const opt=document.createElement('option');opt.value=k.id;opt.textContent='KvK '+k.number+' · '+k.seasonName+' · ACTIVE';target.append(opt)}if(!active.length){const opt=document.createElement('option');opt.textContent='No active KvK available';target.append(opt)}$('btCloseResult').value='';$('btCloseDate').value='';$('btCloseNotes').value='';$('btCloseNotesCount').textContent='0 / 2000 characters';document.querySelectorAll('#btCloseTags input').forEach(el=>el.checked=false);closeState.validated=null;$('btCloseValidation').dataset.state='';$('btCloseValidation').textContent=active.length?'Select an active KvK, result and end date to validate.':'No active KvK: closure validation is unavailable.';$('btValidateClose').disabled=!active.length;open('btCloseKvkDialog');checkCloseReadiness()});
+// CF-014.5 Phase C: read-only RE-OPEN UI. Never issue a POST from this version.
+const reopenUi={contract:null,readiness:null};
+function reopenTodayBerlin(){return new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Berlin',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());}
+function reopenCandidates(){const today=reopenTodayBerlin();return getKvks().filter(k=>String(k.status||'').toLowerCase()==='closed'&&/^\d{4}-\d{2}-\d{2}$/.test(String(k.endDate||''))&&today<k.endDate);}
+function syncReopenInfo(){
+ const target=$('btReopenTarget'),reason=$('btReopenReason').value.trim(),confirm=$('btReopenConfirmation').value;
+ const found=reopenCandidates().find(k=>k.id===target.value);
+ const msg=$('btReopenValidation');msg.dataset.state='';
+ if(!found){msg.textContent='No potentially eligible closed KvK. Historical KvKs are protected. NO WRITE.';return;}
+ if(!reason){msg.textContent='A re-opening reason is required. NO WRITE.';return;}
+ if(confirm!=='Reopen this KVK'){msg.textContent='Type the exact confirmation phrase to complete the local preview. NO WRITE.';return;}
+ msg.textContent='Local preview complete for '+found.id+'. Server-side eligibility and closure history have NOT been verified. RE-OPEN remains LOCKED. NO WRITE.';
+}
+$('btReopenKvk').addEventListener('click',async()=>{
+ const target=$('btReopenTarget');target.replaceChildren();
+ const candidates=reopenCandidates();
+ if(!candidates.length){const o=document.createElement('option');o.value='';o.textContent='No closed KvK within original end window';target.append(o)}
+ for(const k of candidates){const o=document.createElement('option');o.value=k.id;o.textContent='KvK '+k.number+' · '+(k.seasonName||k.id)+' · END '+k.endDate;target.append(o)}
+ $('btReopenReason').value='';$('btReopenConfirmation').value='';$('btSubmitReopen').disabled=true;
+ $('btReopenValidation').textContent='Checking read-only security contract…';open('btReopenKvkDialog');
+ try{const [a,b]=await Promise.all([fetch('/api/v1/leadership/kvks/reopen-contract',{credentials:'same-origin',cache:'no-store'}),fetch('/api/v1/leadership/kvks/write-readiness',{credentials:'same-origin',cache:'no-store'})]);reopenUi.contract=a.ok?await a.json():null;reopenUi.readiness=b.ok?await b.json():null;
+ if(!reopenUi.contract?.ok||!reopenUi.readiness?.ok){$('btReopenValidation').textContent='Read-only security check unavailable. RE-OPEN remains LOCKED.';return;}
+ if(reopenUi.readiness.reopenEnabled!==false||reopenUi.contract.reopenEnabled!==false){$('btReopenValidation').textContent='Production RE-OPEN configuration changed. This UI remains locked pending explicit authorization.';return;}
+ syncReopenInfo();
+ }catch(_error){$('btReopenValidation').textContent='Security check failed. RE-OPEN remains LOCKED.';}
+});
+for(const id of ['btReopenTarget','btReopenReason','btReopenConfirmation'])$(id).addEventListener('input',syncReopenInfo);
+$('btValidateReopen').addEventListener('click',syncReopenInfo);
 $('btSelectComparisonKvk').addEventListener('click',()=>{const choice=$('btComparisonChoice');choice.replaceChildren();const empty=document.createElement('option');empty.value='';empty.textContent='SELECT KVK / SEASON';choice.append(empty);for(const k of getKvks()){const o=document.createElement('option');o.value=k.id;o.textContent='KvK '+k.number+' · '+k.seasonName+' · '+(String(k.status||'').toLowerCase()==='historical'?'HISTORICAL':'ACTIVE');choice.append(o)}choice.value=$('kvkSelect').value&&$('btComparisonActions').hidden===false?$('kvkSelect').value:'';choice.dispatchEvent(new Event('change'));open('btComparisonSelectorDialog')});
 $('btComparisonChoice').addEventListener('change',()=>{const k=getKvks().find(x=>x.id===$('btComparisonChoice').value);const historical=String(k?.status||'').toLowerCase()==='historical';$('btSelectorKvk').textContent=k?.id||'—';$('btSelectorStatus').textContent=k?(historical?'HISTORICAL':'ACTIVE'):'—';$('btSelectorMode').textContent=k?(historical?'START → END':'START → LATEST'):'—';$('btSelectorWindow').textContent=k?((k.startDate||'START')+' → '+(historical?(k.endDate||'END'):'LATEST')):'—';$('btUseComparisonChoice').disabled=!k});
 $('btUseComparisonChoice').addEventListener('click',()=>{const id=$('btComparisonChoice').value;if(!getKvks().some(k=>k.id===id))return;const k=getKvks().find(k=>k.id===id);$('kvkSelect').value=id;$('kvkSelect').dispatchEvent(new Event('change'));$('comparisonResults').hidden=true;$('comparisonRows').replaceChildren();$('exportComparison').disabled=true;$('btComparisonActions').hidden=false;$('comparisonContext').hidden=false;$('comparisonState').hidden=false;$('comparisonContext').textContent='Comparison source: '+id+' · '+(String(k.status||'').toLowerCase()==='historical'?'START → END':'START → LATEST');$('comparisonState').textContent='Ready to load comparison for '+id+'.';$('loadComparison').disabled=false;$('btComparisonSelectorDialog').close()});
