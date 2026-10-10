@@ -293,9 +293,51 @@ export default {
         console.error("KvK CLOSE auth failed", error);
         return apiError(503, "LEADERSHIP_AUTH_UNAVAILABLE", "Authorization unavailable.");
       }
-      // Intentionally refuse all requests before parsing a body or accessing Apps Script.
-      return apiError(423, "PRODUCTION_KVK_CLOSE_LOCKED",
-        "CLOSE contract staged; signed Apps Script writer is not yet installed. No KvK was modified.");
+      // Independent CLOSE gate: never inherits CREATE permission.
+      if (String(env.BT_PRODUCTION_CLOSE_ENABLED || "") !== "YES_PRODUCTION_KVK_CLOSE")
+        return apiError(423, "PRODUCTION_KVK_CLOSE_LOCKED", "Production CLOSE is disabled.");
+      if (request.headers.get("origin") !== url.origin)
+        return apiError(403, "ORIGIN_DENIED", "Same-origin request required.");
+      if (!(request.headers.get("content-type") || "").toLowerCase().startsWith("application/json"))
+        return apiError(415, "JSON_REQUIRED", "JSON required.");
+      try {
+        const body = await request.json();
+        if (body?.confirm !== "CONFIRM_PRODUCTION_KVK_CLOSE")
+          return apiError(400, "CONFIRMATION_REQUIRED", "Explicit CLOSE confirmation required.");
+        const kvkId = String(body.kvkId || ""), result = String(body.result || "");
+        const actualEndDate = String(body.actualEndDate || ""), requestId = String(body.requestId || "");
+        const notes = String(body.notes || "");
+        const tags = body.tags;
+        if (!/^3903-KVK[1-9][0-9]{0,5}$/.test(kvkId) ||
+            !["WIN","LOST","MANUAL"].includes(result) ||
+            !/^\\d{4}-\\d{2}-\\d{2}$/.test(actualEndDate) ||
+            !/^[a-f0-9-]{36}$/i.test(requestId) ||
+            !Array.isArray(tags) || tags.length > 4 ||
+            tags.some(t => !["WITH_STAR","WITHOUT_STAR","ALLY_SURRENDERED","SURRENDERED"].includes(t)) ||
+            new Set(tags).size !== tags.length ||
+            (tags.includes("WITH_STAR") && tags.includes("WITHOUT_STAR")) ||
+            notes.length > 2000)
+          return apiError(400, "INVALID_CLOSE_REQUEST", "Invalid CLOSE payload.");
+        const secret = String(env.BT_BRIDGE_SECRET || ""), base = getAppsScriptApiUrl(env);
+        if (secret.length < 32 || !base) return apiError(503, "CLOSE_BRIDGE_UNAVAILABLE", "Write bridge not configured.");
+        const timestamp = String(Math.floor(Date.now() / 1000)), nonce = crypto.randomUUID();
+        const message = [timestamp,nonce,"CLOSE_KVK",requestId,kvkId,result,actualEndDate,JSON.stringify(tags),notes].join("\\n");
+        const key = await crypto.subtle.importKey("raw",new TextEncoder().encode(secret),
+          {name:"HMAC",hash:"SHA-256"},false,["sign"]);
+        const signature = Array.from(new Uint8Array(await crypto.subtle.sign("HMAC",key,new TextEncoder().encode(message))))
+          .map(b=>b.toString(16).padStart(2,"0")).join("");
+        const upstream = await fetch(base,{method:"POST",headers:{"content-type":"application/json"},
+          redirect:"follow",signal:AbortSignal.timeout(15000),
+          body:JSON.stringify({bridgeWrite:1,action:"CLOSE_KVK",timestamp,nonce,requestId,kvkId,result,actualEndDate,tags,notes,signature})});
+        let reply; try { reply = await upstream.json(); } catch { return apiError(502,"CLOSE_BRIDGE_BAD_RESPONSE","Unexpected upstream response."); }
+        if (!upstream.ok || !reply?.ok)
+          return apiError(reply?.code === "PRODUCTION_CLOSE_LOCKED" ? 423 : 409,
+            reply?.code || "CLOSE_REJECTED",reply?.message || "Close was not completed.");
+        return json({ok:true,mode:"PRODUCTION_CLOSE",kvk:reply.kvk,duplicate:!!reply.duplicate,requestId});
+      } catch (error) {
+        console.error("Production CLOSE bridge unavailable",String(error?.name || "Error"));
+        return apiError(503,"CLOSE_STATUS_UNCERTAIN","Check production audit before retrying with the same request ID.");
+      }
     }
 
     // Read-only contract metadata for the next CLOSE UI/backend release.
@@ -311,14 +353,14 @@ export default {
       } catch (error) {
         return apiError(503, "LEADERSHIP_AUTH_UNAVAILABLE", "Authorization unavailable.");
       }
-      return json({ok:true,stage:"CF-014.4-PHASE-B1",mode:"CONTRACT_ONLY",writesEnabled:false,
+      return json({ok:true,stage:"CF-014.4-PHASE-B2",mode:"SIGNED_CLOSE_GATED",writesEnabled:false,
         resultOptions:["WIN","LOST","MANUAL"],
         tagOptions:["WITH_STAR","WITHOUT_STAR","ALLY_SURRENDERED","SURRENDERED"],
         mutuallyExclusiveTagGroups:[["WITH_STAR","WITHOUT_STAR"]],
         multipleTagsAllowed:true,notes:{optional:true,maxLength:2000},
         requiredFields:["kvkId","result","actualEndDate"],
         preservedFields:["End Scan Date"],
-        note:"Read-only contract. Production CLOSE remains locked; no database changes."});
+        note:"Contract metadata only. Signed CLOSE backend installed; separate Worker and Apps Script gates required for writes."});
     }
 
     // CF-013.7: deploy-safe readiness contract for the future KvK write bridge.
@@ -336,11 +378,12 @@ export default {
           && !!getAppsScriptApiUrl(env);
         return json({
           ok: true,
-          stage: "CF-014.4-PHASE-B1",
+          stage: "CF-014.4-PHASE-B2",
           mode: "PRODUCTION_CREATE_GATED_CLOSE_LOCKED",
           writesEnabled: createReady,
           createEnabled: createReady,
-          closeEnabled: false,
+          closeEnabled: String(env.BT_PRODUCTION_CLOSE_ENABLED || "") === "YES_PRODUCTION_KVK_CLOSE"
+            && String(env.BT_BRIDGE_SECRET || "").length >= 32 && !!getAppsScriptApiUrl(env),
           productionWritesAllowed: createReady,
           note: createReady ? "Worker CREATE gate enabled; Apps Script independently validates its own gate." : "Production CREATE disabled in Cloudflare configuration."
         });
