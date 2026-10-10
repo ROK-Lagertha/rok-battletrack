@@ -420,17 +420,17 @@ for(const e of [file,kvk,snap])e.addEventListener('change',display);
  <div class="bt-dlg-footer">PROTECTED ACTION · Requires verified write API, confirmation and audit logging.</div>
 </dialog>
 <dialog class="bt-leadership-dialog" id="btReopenKvkDialog" aria-labelledby="btReopenTitle">
- <div class="bt-dlg-top"><div><div class="bt-kicker">KVK MANAGEMENT · CF-014.5 PHASE E.1</div><h3 id="btReopenTitle">Re-open KvK</h3></div><button type="button" class="bt-dlg-x" data-close="btReopenKvkDialog" aria-label="Close">✕</button></div>
+ <div class="bt-dlg-top"><div><div class="bt-kicker">KVK MANAGEMENT · CF-014.5 PHASE E.3</div><h3 id="btReopenTitle">Re-open KvK</h3></div><button type="button" class="bt-dlg-x" data-close="btReopenKvkDialog" aria-label="Close">✕</button></div>
  <p>Only KvKs closed early may be re-opened before their original planned end date. Historical and completed KvKs remain protected.</p>
- <label for="btReopenTarget">CLOSED KVK · CANDIDATE</label><select id="btReopenTarget"></select>
- <div class="bt-dlg-notice">Candidate selection is informational. The signed backend must independently verify early closure, original end date and audit history.</div>
+ <label for="btReopenTarget">EXISTING KVK · READ-ONLY CHECK</label><select id="btReopenTarget"></select>
+ <div class="bt-dlg-notice">You can inspect any existing KvK. Only a signed backend decision can confirm eligibility; historical and active KvKs remain protected.</div>
  <label for="btReopenReason">RE-OPEN REASON · REQUIRED</label>
  <textarea id="btReopenReason" rows="4" maxlength="2000" placeholder="Explain why leadership is re-opening this KvK…" style="width:100%;box-sizing:border-box;border-radius:9px;padding:10px;background:transparent;color:inherit"></textarea>
  <label for="btReopenConfirmation">TYPE EXACTLY: Reopen this KVK</label><input id="btReopenConfirmation" autocomplete="off" spellcheck="false" placeholder="Reopen this KVK">
  <button class="bt-dlg-primary" id="btValidateReopen" type="button">CHECK ELIGIBILITY · NO WRITE</button>
  <p id="btReopenValidation" class="bt-validation-message" role="status" aria-live="polite">RE-OPEN is locked. No database changes will be made.</p>
  <button class="bt-dlg-primary" id="btSubmitReopen" type="button" disabled>RE-OPEN KVK · LOCKED</button>
- <div class="bt-dlg-footer">PHASE E.1 · REQUEST PREVIEW ONLY · RE-OPEN remains locked. No write requests are sent.</div>
+ <div class="bt-dlg-footer">PHASE E.3 · SIGNED READ-ONLY ELIGIBILITY · RE-OPEN remains locked. No write requests are sent.</div>
 </dialog>
 <dialog class="bt-leadership-dialog" id="btComparisonSelectorDialog" aria-labelledby="btSelectorTitle">
  <div class="bt-dlg-top"><div><div class="bt-kicker">LEADERSHIP KVK SELECTOR</div><h3 id="btSelectorTitle">Select KvK</h3></div><button type="button" class="bt-dlg-x" data-close="btComparisonSelectorDialog" aria-label="Close">✕</button></div>
@@ -670,53 +670,119 @@ $('btCreateStory').addEventListener('change',()=>{
 $('btAddKvk').addEventListener('click',()=>{invalidatePreflight('create');const list=getKvks(),next=Number(window.BattleTrackLeadershipNext?.number)||Math.max(0,...list.map(x=>Number(x.number)||0))+1;$('btNextKvkNumber').textContent='KvK '+next;$('btNextKvkId').textContent=window.BattleTrackLeadershipNext?.id||'3903-KVK'+next;$('btCreateStory').value='';$('btCreateStart').value='';$('btCreateEnd').value='';$('btCreateSeason').textContent='Select a story';$('btCreateValidation').dataset.state='';$('btCreateValidation').textContent='Choose a story and dates to run a secure preflight check.';open('btCreateKvkDialog');checkCreateReadiness()});
 $('btCreateStart').addEventListener('change',()=>{const value=$('btCreateStart').value;if(!value){$('btCreateEnd').value='';return}const date=new Date(value+'T00:00:00Z');date.setUTCDate(date.getUTCDate()+50);$('btCreateEnd').value=date.toISOString().slice(0,10)});
 $('btCloseKvk').addEventListener('click',()=>{invalidatePreflight('close');const target=$('btCloseTarget');target.replaceChildren();const active=getKvks().filter(k=>!['historical','completed','closed'].includes(String(k.status||'').toLowerCase()));for(const k of active){const opt=document.createElement('option');opt.value=k.id;opt.textContent='KvK '+k.number+' · '+k.seasonName+' · ACTIVE';target.append(opt)}if(!active.length){const opt=document.createElement('option');opt.textContent='No active KvK available';target.append(opt)}$('btCloseResult').value='';$('btCloseDate').value='';$('btCloseNotes').value='';$('btCloseNotesCount').textContent='0 / 2000 characters';document.querySelectorAll('#btCloseTags input').forEach(el=>el.checked=false);closeState.validated=null;$('btCloseValidation').dataset.state='';$('btCloseValidation').textContent=active.length?'Select an active KvK, result and end date to validate.':'No active KvK: closure validation is unavailable.';$('btValidateClose').disabled=!active.length;open('btCloseKvkDialog');checkCloseReadiness()});
-// CF-014.5 Phase E.1: prepare a production request without sending it.
-// SECURITY HOLD: this release intentionally contains NO RE-OPEN POST and no enabled submit path.
-const reopenUi={contract:null,readiness:null,validated:null};
-function reopenTodayBerlin(){return new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Berlin',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());}
-function reopenCandidates(){const today=reopenTodayBerlin();return getKvks().filter(k=>String(k.status||'').toLowerCase()==='closed'&&/^\d{4}-\d{2}-\d{2}$/.test(String(k.endDate||''))&&today<k.endDate);}
-function reopenPayloadPreview(){
- const target=$('btReopenTarget').value,reason=$('btReopenReason').value.trim();
- const eligible=reopenCandidates().find(k=>k.id===target);
- if(!eligible)return {ok:false,message:'No potentially eligible closed KvK. Historical KvKs are protected.'};
- if(reason.length<10||reason.length>2000)return {ok:false,message:'A reason of 10–2000 characters is required.'};
- if($('btReopenConfirmation').value!=='Reopen this KVK')return {ok:false,message:'Type exactly: Reopen this KVK.'};
- if(!reopenUi.contract?.ok||reopenUi.contract.mode!=='SIGNED_REOPEN_GATED'||!reopenUi.readiness?.ok)
-   return {ok:false,message:'Security contract/readiness unavailable. RE-OPEN remains locked.'};
- if(reopenUi.readiness.reopenEnabled!==false||reopenUi.contract.reopenEnabled!==false)
-   return {ok:false,message:'Security configuration changed. This UI requires a new release before any writes.'};
- // Prepared only: production confirmation and requestId will be generated by a future authorized release.
- return {ok:true,kvkId:target,reason};
+// CF-014.5 Phase E.3: signed, read-only server eligibility feedback.
+// SECURITY HOLD: no RE-OPEN POST, no enabled submit path, no production writes.
+const reopenUi={contract:null,readiness:null,requestVersion:0,busy:false};
+function reopenCandidates(){return getKvks().filter(k=>/^3903-KVK[1-9][0-9]{0,5}$/.test(String(k.id||'')));}
+function reopenSetMessage(message,state=''){
+ const node=$('btReopenValidation');node.dataset.state=state;node.textContent=message;
 }
-function syncReopenInfo(){
- reopenUi.validated=null;$('btSubmitReopen').disabled=true;
- const msg=$('btReopenValidation');msg.dataset.state='';
- const check=reopenPayloadPreview();
- msg.textContent=check.ok
-   ?'Local request preview ready for '+check.kvkId+'. Server-side audit/eligibility NOT verified. PHASE E.1 · NO WRITE.'
-   :check.message+' RE-OPEN remains LOCKED · NO WRITE.';
+function reopenResetFeedback(){
+ reopenUi.requestVersion++;
+ $('btSubmitReopen').disabled=true;
+ const id=$('btReopenTarget').value;
+ reopenSetMessage(id
+   ?'Select CHECK ELIGIBILITY to ask the signed backend about '+id+'. No write will occur.'
+   :'Select an existing KvK to run a read-only eligibility check.');
+}
+function reopenLocalPreview(){
+ const id=$('btReopenTarget').value,reason=$('btReopenReason').value.trim();
+ if(!reopenCandidates().some(k=>k.id===id))return 'Select an existing KvK.';
+ if(reason.length<10||reason.length>2000)return 'Reason must contain 10–2000 characters.';
+ if($('btReopenConfirmation').value!=='Reopen this KVK')return 'Type exactly: Reopen this KVK.';
+ return '';
+}
+function reopenResultMessage(data){
+ const code=String(data?.code||'UNKNOWN');
+ const messages={
+  ELIGIBLE:'Backend confirms eligibility at the time of this read-only check. This is NOT permission to write.',
+  AUDIT_NOT_INITIALIZED:'Production audit does not exist yet. No signed CLOSE history can be verified.',
+  KVK_SHEET_MISSING:'KvKs data sheet is missing.',
+  KVK_NOT_FOUND:'KvK was not found in the database.',
+  KVK_NOT_CLOSED:'KvK is not Closed; only eligible early closures can be re-opened.',
+  PLANNED_END_REACHED:'Original planned end date has been reached.',
+  NOT_EARLY_CLOSURE:'The closure was not earlier than the original end date.',
+  ACTUAL_END_IN_FUTURE:'Actual closure date is in the future.',
+  SIGNED_CLOSURE_METADATA_REQUIRED:'Signed closure metadata is missing or invalid.',
+  AUTHORIZED_CLOSE_AUDIT_REQUIRED:'No qualifying completed signed CLOSE audit entry was found.',
+  KVK_WRITE_RECONCILIATION_REQUIRED:'Unresolved production audit requires manual reconciliation.',
+  END_DATES_MISSING:'Original/actual closure dates are missing or invalid.',
+  KVK_SCHEMA_MISMATCH:'Required KvK columns are missing.',
+  DUPLICATE_KVK_ID:'Duplicate KvK IDs require reconciliation.'
+ };
+ return code+' — '+(messages[code]||String(data?.reason||'Eligibility could not be confirmed.'));
 }
 $('btReopenKvk').addEventListener('click',async()=>{
- reopenUi.contract=null;reopenUi.readiness=null;reopenUi.validated=null;
- const target=$('btReopenTarget');target.replaceChildren();const candidates=reopenCandidates();
- if(!candidates.length){const o=document.createElement('option');o.value='';o.textContent='No closed KvK within original end window';target.append(o)}
- for(const k of candidates){const o=document.createElement('option');o.value=k.id;o.textContent='KvK '+k.number+' · '+(k.seasonName||k.id)+' · END '+k.endDate;target.append(o)}
- $('btReopenReason').value='';$('btReopenConfirmation').value='';$('btSubmitReopen').disabled=true;
- $('btReopenValidation').textContent='Checking read-only security contract…';open('btReopenKvkDialog');
+ reopenUi.contract=null;reopenUi.readiness=null;reopenUi.busy=false;
+ const version=++reopenUi.requestVersion;
+ const target=$('btReopenTarget');target.replaceChildren();
+ const kvks=reopenCandidates();
+ const empty=document.createElement('option');empty.value='';empty.textContent='SELECT EXISTING KVK';target.append(empty);
+ for(const k of kvks){
+  const opt=document.createElement('option');opt.value=k.id;
+  opt.textContent='KvK '+k.number+' · '+(k.seasonName||k.id)+' · '+(k.status||'UNKNOWN');
+  target.append(opt);
+ }
+ $('btReopenReason').value='';$('btReopenConfirmation').value='';
+ $('btSubmitReopen').disabled=true;$('btValidateReopen').disabled=!kvks.length;
+ reopenSetMessage('Checking read-only security contracts…');
+ open('btReopenKvkDialog');
  try{
   const [a,b]=await Promise.all([
    fetch('/api/v1/leadership/kvks/reopen-contract',{credentials:'same-origin',cache:'no-store'}),
    fetch('/api/v1/leadership/kvks/write-readiness',{credentials:'same-origin',cache:'no-store'})
   ]);
+  if(version!==reopenUi.requestVersion)return;
   reopenUi.contract=a.ok?await a.json():null;reopenUi.readiness=b.ok?await b.json():null;
-  syncReopenInfo();
- }catch(_error){$('btReopenValidation').textContent='Security check failed. RE-OPEN remains LOCKED · NO WRITE.';}
+  if(version!==reopenUi.requestVersion)return;
+  if(!reopenUi.contract?.ok||reopenUi.contract.mode!=='SIGNED_REOPEN_GATED'||!reopenUi.readiness?.ok){
+   reopenSetMessage('Security contract unavailable. RE-OPEN stays LOCKED.');return;
+  }
+  if(reopenUi.readiness.reopenEnabled!==false||reopenUi.contract.reopenEnabled!==false){
+   reopenSetMessage('Production configuration changed. This read-only UI will not authorize writes.');return;
+  }
+  reopenResetFeedback();
+ }catch(_error){
+  if(version===reopenUi.requestVersion)reopenSetMessage('Security check failed. RE-OPEN remains LOCKED.');
+ }
 });
 for(const id of ['btReopenTarget','btReopenReason','btReopenConfirmation']){
- $(id).addEventListener('input',syncReopenInfo);$(id).addEventListener('change',syncReopenInfo);
+ $(id).addEventListener('input',reopenResetFeedback);
+ $(id).addEventListener('change',reopenResetFeedback);
 }
-$('btValidateReopen').addEventListener('click',syncReopenInfo);
-// Deliberately no click handler on btSubmitReopen: a separate, explicitly approved phase must enable writes.
+$('btValidateReopen').addEventListener('click',async()=>{
+ if(reopenUi.busy)return;
+ const id=$('btReopenTarget').value;
+ if(!reopenCandidates().some(k=>k.id===id)){
+  reopenSetMessage('Select an existing KvK before checking eligibility.');return;
+ }
+ if(!reopenUi.contract?.ok||!reopenUi.readiness?.ok){
+  reopenSetMessage('Read-only security contract unavailable. RE-OPEN remains LOCKED.');return;
+ }
+ const version=++reopenUi.requestVersion;
+ reopenUi.busy=true;$('btValidateReopen').disabled=true;
+ $('btSubmitReopen').disabled=true;
+ reopenSetMessage('Checking signed backend eligibility for '+id+'… NO WRITE.');
+ try{
+  const response=await fetch('/api/v1/leadership/kvks/reopen-eligibility?kvkId='+encodeURIComponent(id),
+   {method:'GET',credentials:'same-origin',cache:'no-store'});
+  const data=await response.json();
+  if(version!==reopenUi.requestVersion)return;
+  if(!response.ok||!data?.ok||data.mode!=='READ_ONLY'||data.writesEnabled!==false||data.kvkId!==id){
+   reopenSetMessage('Server eligibility unavailable or unexpected response. RE-OPEN stays LOCKED.');return;
+  }
+  const result=reopenResultMessage(data);
+  const previewError=reopenLocalPreview();
+  reopenSetMessage((data.eligible===true?'ELIGIBLE · ':'NOT ELIGIBLE · ')+result+
+   (previewError?' Local request preview: '+previewError:' Local request preview complete.')+
+   ' RE-OPEN remains LOCKED · NO WRITE.',data.eligible===true?'valid':'');
+ }catch(_error){
+  if(version===reopenUi.requestVersion)reopenSetMessage('Eligibility request failed. RE-OPEN stays LOCKED · NO WRITE.');
+ }finally{
+  reopenUi.busy=false;$('btValidateReopen').disabled=!reopenCandidates().length;
+ }
+});
+// Deliberately no click handler on btSubmitReopen: separate explicit authorization required.
 $('btSelectComparisonKvk').addEventListener('click',()=>{const choice=$('btComparisonChoice');choice.replaceChildren();const empty=document.createElement('option');empty.value='';empty.textContent='SELECT KVK / SEASON';choice.append(empty);for(const k of getKvks()){const o=document.createElement('option');o.value=k.id;o.textContent='KvK '+k.number+' · '+k.seasonName+' · '+(String(k.status||'').toLowerCase()==='historical'?'HISTORICAL':'ACTIVE');choice.append(o)}choice.value=$('kvkSelect').value&&$('btComparisonActions').hidden===false?$('kvkSelect').value:'';choice.dispatchEvent(new Event('change'));open('btComparisonSelectorDialog')});
 $('btComparisonChoice').addEventListener('change',()=>{const k=getKvks().find(x=>x.id===$('btComparisonChoice').value);const historical=String(k?.status||'').toLowerCase()==='historical';$('btSelectorKvk').textContent=k?.id||'—';$('btSelectorStatus').textContent=k?(historical?'HISTORICAL':'ACTIVE'):'—';$('btSelectorMode').textContent=k?(historical?'START → END':'START → LATEST'):'—';$('btSelectorWindow').textContent=k?((k.startDate||'START')+' → '+(historical?(k.endDate||'END'):'LATEST')):'—';$('btUseComparisonChoice').disabled=!k});
 $('btUseComparisonChoice').addEventListener('click',()=>{const id=$('btComparisonChoice').value;if(!getKvks().some(k=>k.id===id))return;const k=getKvks().find(k=>k.id===id);$('kvkSelect').value=id;$('kvkSelect').dispatchEvent(new Event('change'));$('comparisonResults').hidden=true;$('comparisonRows').replaceChildren();$('exportComparison').disabled=true;$('btComparisonActions').hidden=false;$('comparisonContext').hidden=false;$('comparisonState').hidden=false;$('comparisonContext').textContent='Comparison source: '+id+' · '+(String(k.status||'').toLowerCase()==='historical'?'START → END':'START → LATEST');$('comparisonState').textContent='Ready to load comparison for '+id+'.';$('loadComparison').disabled=false;$('btComparisonSelectorDialog').close()});
