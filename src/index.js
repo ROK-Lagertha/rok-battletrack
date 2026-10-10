@@ -278,6 +278,26 @@ export default {
       }
     }
 
+    // CF-014.4 Phase A: reserved production CLOSE endpoint, deliberately locked.
+    // The endpoint never calls Apps Script, parses a payload or writes data.
+    // Separate backend implementation, tests and approval are required before activation.
+    if (url.pathname === "/api/v1/leadership/kvks/close") {
+      if (request.method !== "POST") return apiError(405, "METHOD_NOT_ALLOWED", "POST required.");
+      try {
+        const sessionCheck = new Request(new URL("/api/auth/discord/me", request.url), {
+          method: "GET", headers: { cookie: request.headers.get("cookie") || "" }
+        });
+        const auth = await discordAuth(sessionCheck, env, "/api/auth/discord/me");
+        if (!auth.ok) return apiError(auth.status === 401 ? 401 : 403,
+          "LEADERSHIP_ACCESS_DENIED", "Discord Officer and Data roles are required.");
+      } catch (error) {
+        console.error("KvK CLOSE auth failed", error);
+        return apiError(503, "LEADERSHIP_AUTH_UNAVAILABLE", "Authorization unavailable.");
+      }
+      return apiError(423, "PRODUCTION_KVK_CLOSE_LOCKED",
+        "Production CLOSE is not implemented or enabled. No KvK was modified.");
+    }
+
     // CF-013.7: deploy-safe readiness contract for the future KvK write bridge.
     // This endpoint NEVER calls Apps Script and NEVER changes production data.
     if (url.pathname === "/api/v1/leadership/kvks/write-readiness") {
