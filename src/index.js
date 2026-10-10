@@ -215,6 +215,27 @@ export default {
       }
     }
 
+    // CF-014.2 Phase A: production CREATE route is intentionally hard-gated.
+    // This guard executes before any upstream request and cannot write a KvK.
+    // A real signed, audited and idempotent GAS write implementation is required
+    // before a separate, explicitly approved production activation.
+    if (url.pathname === "/api/v1/leadership/kvks/create") {
+      if (request.method !== "POST") return apiError(405, "METHOD_NOT_ALLOWED", "POST required.");
+      try {
+        const sessionCheck = new Request(new URL("/api/auth/discord/me", request.url), {
+          method: "GET", headers: { cookie: request.headers.get("cookie") || "" }
+        });
+        const auth = await discordAuth(sessionCheck, env, "/api/auth/discord/me");
+        if (!auth.ok) return apiError(auth.status === 401 ? 401 : 403,
+          "LEADERSHIP_ACCESS_DENIED", "Discord Officer and Data roles are required.");
+      } catch (error) {
+        console.error("KvK CREATE auth failed", error);
+        return apiError(503, "LEADERSHIP_AUTH_UNAVAILABLE", "Authorization unavailable.");
+      }
+      return apiError(423, "PRODUCTION_KVK_WRITES_LOCKED",
+        "Production CREATE is locked until signed write bridge, durable idempotency and audit are approved.");
+    }
+
     // CF-013.7: deploy-safe readiness contract for the future KvK write bridge.
     // This endpoint NEVER calls Apps Script and NEVER changes production data.
     if (url.pathname === "/api/v1/leadership/kvks/write-readiness") {
@@ -227,7 +248,7 @@ export default {
         if (!auth.ok) return apiError(auth.status === 401 ? 401 : 403, "LEADERSHIP_ACCESS_DENIED", "Discord Officer and Data roles are required.");
         return json({
           ok: true,
-          stage: "CF-013.7",
+          stage: "CF-014.2-PHASE-A",
           mode: "READ_ONLY",
           writesEnabled: false,
           createEnabled: false,
