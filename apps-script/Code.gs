@@ -71,6 +71,11 @@ function doGet(e) {
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 
+/** CF-014.2 Phase B: isolated, signed production write gateway. */
+function doPost(e) {
+  return btProductionWritePost_(e);
+}
+
 function include_(filename) {
   return HtmlService
     .createHtmlOutputFromFile(filename)

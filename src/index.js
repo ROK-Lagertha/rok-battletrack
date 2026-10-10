@@ -232,8 +232,50 @@ export default {
         console.error("KvK CREATE auth failed", error);
         return apiError(503, "LEADERSHIP_AUTH_UNAVAILABLE", "Authorization unavailable.");
       }
-      return apiError(423, "PRODUCTION_KVK_WRITES_LOCKED",
-        "Production CREATE is locked until signed write bridge, durable idempotency and audit are approved.");
+      // CF-014.2 Phase B: TWO independent explicit gates. Neither is enabled by this release.
+      if (String(env.BT_PRODUCTION_CREATE_ENABLED || "") !== "YES_PRODUCTION_KVK_CREATE")
+        return apiError(423, "PRODUCTION_KVK_WRITES_LOCKED", "Production CREATE remains disabled pending separate live approval.");
+      const origin = request.headers.get("origin");
+      if (origin !== url.origin) return apiError(403, "ORIGIN_DENIED", "Same-origin request required.");
+      if (!(request.headers.get("content-type") || "").toLowerCase().startsWith("application/json"))
+        return apiError(415, "JSON_REQUIRED", "JSON required.");
+      try {
+        const body = await request.json();
+        if (!body || body.confirm !== "CONFIRM_PRODUCTION_KVK_CREATE")
+          return apiError(400, "CONFIRMATION_REQUIRED", "Explicit CREATE confirmation required.");
+        const story = String(body.story || "").trim();
+        const startDate = String(body.startDate || "");
+        const endDate = String(body.endDate || "");
+        const requestId = String(body.requestId || "");
+        if (!story || story.length > 160 || !/^\d{4}-\d{2}-\d{2}$/.test(startDate) ||
+            !/^\d{4}-\d{2}-\d{2}$/.test(endDate) ||
+            !/^[a-f0-9-]{36}$/i.test(requestId))
+          return apiError(400, "INVALID_CREATE_REQUEST", "Invalid story, dates or request ID.");
+        const secret = String(env.BT_BRIDGE_SECRET || "");
+        const base = getAppsScriptApiUrl(env);
+        if (secret.length < 32 || !base) return apiError(503, "CREATE_BRIDGE_UNAVAILABLE", "Write bridge not configured.");
+        const timestamp = String(Math.floor(Date.now() / 1000));
+        const nonce = crypto.randomUUID();
+        const message = [timestamp, nonce, "CREATE_KVK", requestId, story, startDate, endDate].join("\n");
+        const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret),
+          {name:"HMAC",hash:"SHA-256"}, false, ["sign"]);
+        const signature = Array.from(new Uint8Array(await crypto.subtle.sign("HMAC",key,new TextEncoder().encode(message))))
+          .map(b=>b.toString(16).padStart(2,"0")).join("");
+        const upstream = await fetch(base, {
+          method:"POST", headers:{"content-type":"application/json"}, redirect:"follow",
+          body:JSON.stringify({bridgeWrite:1,action:"CREATE_KVK",timestamp,nonce,requestId,story,startDate,endDate,signature}),
+          signal:AbortSignal.timeout(15000)
+        });
+        const raw = await upstream.text();
+        let result; try { result = JSON.parse(raw); } catch { return apiError(502,"CREATE_BRIDGE_BAD_RESPONSE","Unexpected upstream response."); }
+        if (!upstream.ok || !result?.ok)
+          return apiError(result?.code === "PRODUCTION_WRITES_LOCKED" ? 423 : 409,
+            result?.code || "CREATE_REJECTED", result?.message || "Create was not completed.");
+        return json({ok:true,mode:"PRODUCTION_CREATE",kvk:result.kvk,requestId,duplicate:!!result.duplicate});
+      } catch (error) {
+        console.error("Production CREATE bridge unavailable", String(error?.name || "Error"));
+        return apiError(503,"CREATE_BRIDGE_UNAVAILABLE","CREATE status uncertain; verify database before retrying with same request ID.");
+      }
     }
 
     // CF-013.7: deploy-safe readiness contract for the future KvK write bridge.
