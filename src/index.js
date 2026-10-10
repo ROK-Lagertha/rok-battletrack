@@ -310,7 +310,7 @@ export default {
         const tags = body.tags;
         if (!/^3903-KVK[1-9][0-9]{0,5}$/.test(kvkId) ||
             !["WIN","LOST","MANUAL"].includes(result) ||
-            !/^\\d{4}-\\d{2}-\\d{2}$/.test(actualEndDate) ||
+            !/^\d{4}-\d{2}-\d{2}$/.test(actualEndDate) ||
             !/^[a-f0-9-]{36}$/i.test(requestId) ||
             !Array.isArray(tags) || tags.length > 4 ||
             tags.some(t => !["WITH_STAR","WITHOUT_STAR","ALLY_SURRENDERED","SURRENDERED"].includes(t)) ||
@@ -321,7 +321,7 @@ export default {
         const secret = String(env.BT_BRIDGE_SECRET || ""), base = getAppsScriptApiUrl(env);
         if (secret.length < 32 || !base) return apiError(503, "CLOSE_BRIDGE_UNAVAILABLE", "Write bridge not configured.");
         const timestamp = String(Math.floor(Date.now() / 1000)), nonce = crypto.randomUUID();
-        const message = [timestamp,nonce,"CLOSE_KVK",requestId,kvkId,result,actualEndDate,JSON.stringify(tags),notes].join("\\n");
+        const message = [timestamp,nonce,"CLOSE_KVK",requestId,kvkId,result,actualEndDate,JSON.stringify(tags),notes].join("\n");
         const key = await crypto.subtle.importKey("raw",new TextEncoder().encode(secret),
           {name:"HMAC",hash:"SHA-256"},false,["sign"]);
         const signature = Array.from(new Uint8Array(await crypto.subtle.sign("HMAC",key,new TextEncoder().encode(message))))
@@ -361,6 +361,50 @@ export default {
         requiredFields:["kvkId","result","actualEndDate"],
         preservedFields:["End Scan Date"],
         note:"Contract metadata only. Signed CLOSE backend installed; separate Worker and Apps Script gates required for writes."});
+    }
+
+    // CF-014.5 Phase A: RE-OPEN contract only. No POST writes are implemented.
+    if (url.pathname === "/api/v1/leadership/kvks/reopen-contract") {
+      if (request.method !== "GET") return apiError(405, "METHOD_NOT_ALLOWED", "GET required.");
+      try {
+        const sessionCheck = new Request(new URL("/api/auth/discord/me", request.url), {
+          method: "GET", headers: { cookie: request.headers.get("cookie") || "" }
+        });
+        const auth = await discordAuth(sessionCheck, env, "/api/auth/discord/me");
+        if (!auth.ok) return apiError(auth.status === 401 ? 401 : 403,
+          "LEADERSHIP_ACCESS_DENIED", "Discord Officer and Data roles are required.");
+      } catch (_) {
+        return apiError(503, "LEADERSHIP_AUTH_UNAVAILABLE", "Authorization unavailable.");
+      }
+      return json({
+        ok:true,stage:"CF-014.5-PHASE-A",mode:"REOPEN_CONTRACT_ONLY",writesEnabled:false,
+        reopenEnabled:false,
+        eligibility:{
+          statusMustBe:"Closed",
+          closeMustBeEarly:true,
+          originalPlannedEndField:"End Scan Date",
+          dateRule:"current Kingdom calendar date < original planned end date",
+          sameKvkId:true,
+          preservePlayerStatistics:true,
+          preservePreviousClosuresInAudit:true,
+          protectedStatuses:["Historical","Completed"]
+        },
+        requiredFields:["kvkId","reason"],
+        futureConfirmation:"Reopen this KVK",
+        note:"Read-only contract. No RE-OPEN write endpoint exists; all production RE-OPEN operations remain unavailable."
+      });
+    }
+
+    if (url.pathname === "/api/v1/leadership/kvks/reopen") {
+      if (request.method !== "POST") return apiError(405, "METHOD_NOT_ALLOWED", "POST required.");
+      try {
+        const sessionCheck = new Request(new URL("/api/auth/discord/me", request.url), {
+          method:"GET",headers:{cookie:request.headers.get("cookie")||""}
+        });
+        const auth=await discordAuth(sessionCheck,env,"/api/auth/discord/me");
+        if(!auth.ok)return apiError(auth.status===401?401:403,"LEADERSHIP_ACCESS_DENIED","Discord Officer and Data roles are required.");
+      } catch (_) {return apiError(503,"LEADERSHIP_AUTH_UNAVAILABLE","Authorization unavailable.");}
+      return apiError(423,"PRODUCTION_KVK_REOPEN_LOCKED","RE-OPEN is not implemented or enabled. No KvK was modified.");
     }
 
     // CF-013.7: deploy-safe readiness contract for the future KvK write bridge.
