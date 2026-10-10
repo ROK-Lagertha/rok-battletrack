@@ -133,6 +133,9 @@ function btProductionClosePost_(e) {
     var parsedDate=new Date(actualEndDate+'T00:00:00Z');
     if(isNaN(parsedDate.getTime())||Utilities.formatDate(parsedDate,'UTC','yyyy-MM-dd')!==actualEndDate)
       return out({ok:false,code:'INVALID_DATE'});
+    // D.7: The actual closure cannot be dated after the current Kingdom calendar day.
+    var kingdomToday=Utilities.formatDate(new Date(),'Europe/Berlin','yyyy-MM-dd');
+    if(actualEndDate>kingdomToday)return out({ok:false,code:'END_DATE_IN_FUTURE'});
     var lock=LockService.getScriptLock();
     if(!lock.tryLock(20000)) return out({ok:false,code:'CLOSE_BUSY'});
     try {
@@ -290,6 +293,8 @@ function btProductionReopenPost_(e) {
       function valid(v){var d=new Date(v+'T00:00:00Z');
         return /^\d{4}-\d{2}-\d{2}$/.test(v)&&!isNaN(d.getTime())&&Utilities.formatDate(d,'UTC','yyyy-MM-dd')===v;}
       if(!valid(planned)||!valid(actual))return out({ok:false,code:'END_DATES_MISSING'});
+      // D.7: Reject a future-dated closure even if its original planned end is later.
+      if(actual>today)return out({ok:false,code:'ACTUAL_END_IN_FUTURE'});
       if(actual>=planned)return out({ok:false,code:'NOT_EARLY_CLOSURE'});
       if(today>=planned)return out({ok:false,code:'PLANNED_END_REACHED'});
       // Snapshot closure details BEFORE clearing them, so past leadership decisions remain recoverable.
