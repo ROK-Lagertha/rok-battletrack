@@ -144,6 +144,8 @@ function btProductionClosePost_(e) {
       var payloadHash=Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,
         [kvkId,result,actualEndDate,JSON.stringify(tags),notes].join('\n'))
         .map(function(b){return ('0'+(b&255).toString(16)).slice(-2);}).join('');
+      var safety=btKvkAuditSafety_(audit,kvkId);
+      if(!safety.ok)return out({ok:false,code:safety.code,message:'Manual audit reconciliation required before further KvK writes.'});
       var entries=audit.getLastRow()>1?audit.getRange(2,2,audit.getLastRow()-1,5).getValues():[];
       for(var j=0;j<entries.length;j++){
         if(String(entries[j][0])!==requestId)continue;
@@ -193,6 +195,27 @@ function btProductionClosePost_(e) {
 }
 
 
+/**
+ * CF-014.5 D.1: fail-closed audit provenance for RE-OPEN and subsequent CLOSE.
+ * The audit is append-only. A PENDING write for this KvK is never guessed to
+ * have succeeded; an officer must reconcile it manually before further writes.
+ * Return values are deliberately independent of the current KvK row status.
+ */
+function btKvkAuditSafety_(audit, kvkId) {
+  var rows=audit.getLastRow()>1?audit.getRange(2,1,audit.getLastRow()-1,7).getValues():[];
+  var latestCompletedAction='', latestCloseRow=0, latestReopenRow=0;
+  for(var i=0;i<rows.length;i++) {
+    var row=rows[i], action=String(row[2]||''), state=String(row[4]||'');
+    if(String(row[5]||'').trim()!==kvkId || (action!=='CLOSE_KVK'&&action!=='REOPEN_KVK'))continue;
+    if(state!=='COMPLETED')return {ok:false,code:'KVK_WRITE_RECONCILIATION_REQUIRED'};
+    latestCompletedAction=action;
+    if(action==='CLOSE_KVK')latestCloseRow=i+2;
+    if(action==='REOPEN_KVK')latestReopenRow=i+2;
+  }
+  return {ok:true,latestCompletedAction:latestCompletedAction,
+    latestCloseRow:latestCloseRow,latestReopenRow:latestReopenRow};
+}
+
 /** CF-014.5 Phase B: independently gated, signed, audit-preserving RE-OPEN. */
 function btProductionReopenPost_(e) {
   function out(v){return ContentService.createTextOutput(JSON.stringify(v)).setMimeType(ContentService.MimeType.JSON);}
@@ -235,6 +258,13 @@ function btProductionReopenPost_(e) {
           return out({ok:true,duplicate:true,kvk:{id:kvkId,status:'Active'}});
         return out({ok:false,code:'REOPEN_STATUS_UNCERTAIN',message:'Review production audit before retrying.'});
       }
+      var safety=btKvkAuditSafety_(audit,kvkId);
+      if(!safety.ok)return out({ok:false,code:safety.code,message:'Manual audit reconciliation required before reopening.'});
+      // A closed row alone is insufficient. Only the latest completed signed
+      // CLOSE (after any earlier RE-OPEN) authorizes a new RE-OPEN cycle.
+      if(safety.latestCompletedAction!=='CLOSE_KVK'||!safety.latestCloseRow||
+         safety.latestCloseRow<=safety.latestReopenRow)
+        return out({ok:false,code:'AUTHORIZED_CLOSE_AUDIT_REQUIRED'});
       var values=sheet.getDataRange().getValues(),headers=values[0].map(String);
       var idCol=headers.indexOf('KvK ID'),statusCol=headers.indexOf('Status');
       var endCol=headers.indexOf('End Scan Date'),actualCol=headers.indexOf('Actual End Date');
@@ -250,6 +280,11 @@ function btProductionReopenPost_(e) {
           return Utilities.formatDate(v,'Europe/Berlin','yyyy-MM-dd');
         return String(v||'').slice(0,10);
       }
+      // Ensure the completed CLOSE is backed by populated closure metadata.
+      var closedAtCol=headers.indexOf('Closed At'),closedByCol=headers.indexOf('Closed By');
+      if(closedAtCol<0||closedByCol<0||!values[index][closedAtCol]||
+         String(values[index][closedByCol]||'').trim()!=='Discord Officer+Data (signed gateway)')
+        return out({ok:false,code:'SIGNED_CLOSURE_METADATA_REQUIRED'});
       var planned=iso(values[index][endCol]),actual=iso(values[index][actualCol]);
       var today=Utilities.formatDate(new Date(),'Europe/Berlin','yyyy-MM-dd');
       function valid(v){var d=new Date(v+'T00:00:00Z');
@@ -266,6 +301,11 @@ function btProductionReopenPost_(e) {
       var history=ss.getSheetByName('_BT_KVK_CLOSURE_HISTORY');
       if(!history){history=ss.insertSheet('_BT_KVK_CLOSURE_HISTORY');
         history.appendRow(['Timestamp','Request ID','KvK ID','Action','Snapshot JSON']);}
+      // Never append a second snapshot for an existing request id.
+      var priorHistory=history.getLastRow()>1?
+        history.getRange(2,2,history.getLastRow()-1,1).getValues():[];
+      if(priorHistory.some(function(r){return String(r[0])===requestId;}))
+        return out({ok:false,code:'REOPEN_HISTORY_RECONCILIATION_REQUIRED'});
       var auditRow=audit.getLastRow()+1;
       audit.appendRow([new Date(),requestId,'REOPEN_KVK',payloadHash,'PENDING',kvkId,'']);
       SpreadsheetApp.flush();
