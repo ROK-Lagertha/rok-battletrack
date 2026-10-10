@@ -1,153 +1,145 @@
 # ⚔️ ROK BattleTrack
 
 **Kingdom 3903 · Rise of Kingdoms analytics & Leadership tools**  
-**Project checkpoint: 2026-10-09 · CF-013.6.3 verified in the deployed Leadership UI**  
-**Migration status: Cloudflare Worker + static frontend; Google Apps Script remains the data backend**
+**Checkpoint: 2026-10-10 · CF-014.5 Phase E.3 live-tested · E.4 security review in progress**
 
-[Open BattleTrack](https://rok-battletrack.jici1203.workers.dev/) · [Repository](https://github.com/ROK-Lagertha/rok-battletrack)
+[Open BattleTrack](https://rok-battletrack.jici1203.workers.dev/) · [GitHub repository](https://github.com/ROK-Lagertha/rok-battletrack)
 
 > **TRACK · UNDERSTAND · COMPARE**
->
-> BattleTrack analyzes prepared Kingdom tracking data. It does **not** sign into or control Rise of Kingdoms accounts, and it does not fetch game data directly.
 
-## At a glance
+BattleTrack analyzes prepared Rise of Kingdoms tracking data. It does **not** log in to or control game accounts or retrieve live game telemetry.
 
-BattleTrack is a mobile-friendly, Kingdom-focused web application for governor performance, KvK history, requirements, rankings and Leadership analytics. The public experience is served through Cloudflare; existing Google Sheets and Google Apps Script provide the underlying tracking data and calculations.
+## Current feature status
 
-**This README describes the Cloudflare deployment represented by the current repository.** Some legacy features still exist in `apps-script/` but have **not** been migrated into the Cloudflare Leadership UI. A legacy implementation is not evidence that the corresponding Cloudflare feature is available.
-
-| Area | Current Cloudflare status |
+| Area | Cloudflare status |
 | --- | --- |
-| Public governor lookup and profile | Available through read-only Apps Script API |
-| Personal requirements, rankings and KvK history | Available in public frontend |
-| Kingdom rankings, statistics and trends | Available through read-only data endpoints |
-| Discord login and Leadership access | Available; Officer **and** Data roles required |
-| Leadership KvK catalog and story selection | Available, signed read-only bridge |
-| Create/close KvK preflight | Available; **validation only, no writes** |
-| Current KvK overview | Read-only; available only if an active KvK exists |
-| Historical Leadership comparison and CSV export | Read-only |
-| Kingdom Scan XLSX selection and local preview | Available; **no upload/import from Cloudflare** |
-| Create / close KvK in Cloudflare | **Not enabled** |
-| Discord HeroScrolls scan intake and controlled import | Planned, not enabled |
+| Governor lookup, personal profiles, requirements and history | Available |
+| Kingdom statistics and DKP/KPR/KP/KILLS rankings | Available |
+| Discord Leadership authentication | Available; **Officer AND Data** roles required |
+| KvK catalog, stories and next-ID lookup | Signed read-only |
+| CREATE / CLOSE validation | Available; preflight only |
+| CREATE / CLOSE / RE-OPEN signed backend handlers | Installed; **production gates OFF** |
+| RE-OPEN eligibility | Signed **READ_ONLY** check; live-tested |
+| RE-OPEN UI submit | **LOCKED**; no POST from current UI |
+| Kingdom Scan XLSX local preview | Available; Cloudflare import not enabled |
+| Current KvK overview | Read-only |
+| Historical comparison and CSV export | Read-only |
+| Discord HeroScrolls scan intake | Planned |
+
+**Production rule:** No synthetic KvKs or test closures in production. `3903-KVK5` is reserved for the next genuine KvK; its start date is not fixed.
 
 ## Public BattleTrack
 
-### Governor profile
+Search by Governor ID for tracked KvK KP, T4/T5 kills, deads, power changes, requirements, performance status and historical records. Missing requirements must not be invented. The interface displays achieved/required values and remaining kills/deads.
 
-Search by **Governor ID** to inspect available battle statistics, including KvK KP, T4/T5 kills, deads, start power, power change, classification and tracked KvK history. The frontend presents a mobile-friendly profile and distinguishes current/latest from historical records when source data is available.
-
-### Requirements and progress
-
-BattleTrack displays configured kill and dead requirements, achieved versus required values, remaining amounts and overall progress. Statuses include **PASS**, **NOT_MET** and **IN_PROGRESS**. Targets are data-driven; missing requirements must not be silently invented.
-
-### Personal and Kingdom rankings
-
-The UI supports **DKP**, **KPR**, **KP** and **KILLS**, including personal rank, nearby governors, prior-KvK rank movement and recent performance trends. Kingdom-wide rankings can be viewed by KvK. Rankings include all governors present in the relevant tracking dataset, including zero-value records.
-
-| Metric | Definition |
+| Ranking | Formula |
 | --- | --- |
 | **DKP** | `(Deads × 10) + (T4 Kills × 5) + (T5 Kills × 15)` |
-| **KPR** | `KvK Kill Points ÷ Start Power` (displayed as a percentage) |
-| **KP** | Kill Points earned during the selected KvK |
+| **KPR** | `KvK Kill Points ÷ Start Power` (shown as %) |
+| **KP** | Kill Points earned during selected KvK |
 | **KILLS** | `T4 Kills + T5 Kills` |
 
-Higher values rank first. Equal metric values share the same rank; percentile positioning does not count ties as governors overtaken.
-
-### History, statistics and trends
-
-Historical KvKs are available in the profile's collapsible history, with recent seasons prioritized. Kingdom statistics aggregate available KP, T4/T5 kills, deads and governor counts. Trend displays compare recent tracked KvKs. These views reflect stored tracking data, **not live game telemetry**.
+Rankings use stored data, include zero-value records and treat equal scores as ties. They are not live game telemetry.
 
 ## 🔐 Leadership Command Center
 
-**Path:** [`/leadership`](https://rok-battletrack.jici1203.workers.dev/leadership)
+[Open Leadership](https://rok-battletrack.jici1203.workers.dev/leadership)
 
-The Cloudflare Leadership route requires Discord OAuth2. On protected requests the backend verifies server-side that the user belongs to the configured Discord guild and has **both** the Officer and Data roles. A login alone does not grant access. Session cookies are Secure, HttpOnly and SameSite=Lax; session lifetime is limited. Privileged data is not intended for public caching.
-
-The current Leadership layout has **four independent functional areas**. A KvK selection in one workflow must not unexpectedly change another.
+Protected routes verify Discord guild membership and **both** required roles on the server. The four functional areas remain independent.
 
 ### 1. KvK Management
 
-- **ADD NEW KVK** determines the next number and ID from the current catalog, independent of the comparison selector.
-- Story choices are read from the `KvK Stories` source, not hardcoded in the browser.
-- Start date is selected manually. The suggested end is **start + 50 days**, remains editable and is a planning date only.
-- **VALIDATE KVK · NO WRITE** performs an authenticated server-side preflight against the current read-only KvK and story metadata.
-- **CLOSE KVK** offers a separate preflight for an active KvK, result (**WIN / LOST / MANUAL**) and actual end date.
-- If form values change, a previous successful validation is invalidated; late responses must not restore stale approval (**CF-013.6.3**).
-- **CREATE KVK** and the final **CLOSE KVK** action are deliberately disabled. Validation does not add or modify a KvK.
+**ADD NEW KVK:** Next KvK number/ID comes from existing records; stories come from `KvK Stories`. The suggested planned end date is **start + 50 days**, but is editable. The planned end date is not an automatic closure trigger.
 
-**Important:** `3903-KVK5` is reserved for the next real KvK. Never create a synthetic KvK in the production spreadsheet to test the migration.
+**CLOSE KVK:** Preflight for an active KvK, with result `WIN`, `LOST` or `MANUAL`, actual end date, optional notes and tags `WITH_STAR`, `WITHOUT_STAR`, `ALLY_SURRENDERED`, `SURRENDERED`. Star tags are mutually exclusive. Original `End Scan Date` is preserved.
+
+**RE-OPEN KVK:** Phase E.3 dialog allows inspection of existing KvKs and calls an authenticated, signed **read-only** backend eligibility endpoint. Local request preview uses a 10–2,000 character reason and the exact phrase `Reopen this KVK`. **CHECK ELIGIBILITY · NO WRITE** shows backend decisions. **RE-OPEN KVK · LOCKED** remains disabled, with no UI POST handler.
+
+Server-side RE-OPEN eligibility requires a real authorized early CLOSE, valid signed closure metadata, an appropriate completed CLOSE audit, and the current Europe/Berlin calendar date strictly before the immutable original planned end date. Historical/completed KvKs remain protected. Actual write handlers recheck conditions independently.
+
+**All CREATE, CLOSE and RE-OPEN production write gates remain OFF.** Installed backend handlers do not imply authorization to write.
 
 ### 2. Kingdom Scan
 
-The Cloudflare Leadership interface provides a styled XLSX file picker and browser-local validation/preview. It displays file metadata and the selected KvK/snapshot assignment without committing an import. **Selecting or previewing a file does not upload, archive or write it.**
-
-The legacy Apps Script application contains a more extensive controlled import pipeline with `Kingdom Snapshots` and `Scan Imports`, file archiving, integrity checks and audit metadata. **That legacy pipeline is not yet exposed as a Cloudflare write operation.**
+Cloudflare supports XLSX selection and browser-local validation/preview. This does not upload or import the file. The legacy Apps Script import pipeline is separate and should not be confused with a Cloudflare write capability.
 
 ### 3. Current KvK Overview
 
-Read-only overview for the **active** KvK, using the protected comparison data. When no active KvK exists, the overview action is unavailable; a historical KvK must not be presented as current.
+Protected, read-only overview for the active KvK. Historical KvKs must not be presented as current.
 
 ### 4. Comparison & Export
 
-Choose a KvK in the dedicated comparison dialog, load a protected read-only comparison and export its **currently loaded** rows to CSV. Historical data uses **START → END**; an active KvK uses **START → LATEST** when available. CSV export is client-side and does not mutate the database. Export fields are escaped to reduce spreadsheet-formula injection risk.
+Independent KvK selection and read-only comparison; historical KvKs use **START → END**, active KvKs **START → LATEST**, where available. CSV export works client-side on loaded rows.
 
 ## Architecture
 
 ```text
 Browser
-  ├── Public UI (Cloudflare static assets)
-  │    └── Cloudflare Worker public read APIs
-  └── /leadership (Discord OAuth2 + server-side role checks)
-       ├── Signed, read-only KvK/story catalog
-       ├── Read-only comparison and overview
-       └── Create/close validation preflight (NO WRITE)
+  ├── Public frontend / public read APIs
+  └── Leadership (Discord OAuth2 + Officer AND Data)
+       ├── Signed read-only KvK/story catalog
+       ├── Signed RE-OPEN eligibility (GET, NO WRITE)
+       ├── Comparison and overview (NO WRITE)
+       ├── CREATE/CLOSE preflight (NO WRITE)
+       └── Signed CREATE/CLOSE/RE-OPEN handlers (GATES OFF)
                          │
-                         ▼
-              Google Apps Script backend
+                 Cloudflare Worker
                          │
-                         ▼
-                Google Sheets tracking data
+                 Google Apps Script
+                         │
+                 Google Sheets
 ```
 
-Cloudflare serves the public assets from `public/` and runs the Worker in `src/index.js`. `src/discord-auth.js` handles the Discord OAuth2/session flow. The Worker accesses Google Apps Script through configured URLs; protected Leadership reads use a signed HMAC bridge. `apps-script/` preserves the legacy Google Apps Script code and data access logic during migration.
+| Repository path | Purpose |
+| --- | --- |
+| `public/` | Public and Leadership frontend |
+| `public/leadership.html` | Four Leadership areas and E.3 RE-OPEN UI |
+| `src/index.js` | Cloudflare Worker, protected API and HMAC bridge |
+| `src/discord-auth.js` | Discord OAuth, sessions and role checks |
+| `apps-script/Code.gs` | Core data backend and legacy functionality |
+| `apps-script/Bridge.gs` | Signed read bridge and read-only eligibility |
+| `apps-script/ProductionWrite.gs` | Gated write handlers, audit and locking |
+| `docs/` | Project notes, model and migration history |
+| `wrangler.jsonc` | Cloudflare configuration |
+| `package.json` | Wrangler scripts |
 
-### Repository layout
+## API overview
 
-```text
-public/              Cloudflare-served public and Leadership frontend
-src/index.js         Cloudflare Worker, API routing and signed read bridge
-src/discord-auth.js  Discord OAuth2, session and role verification
-apps-script/         Existing Google Apps Script backend and legacy UI
-docs/                Project notes, data model and migration history
-wrangler.jsonc       Cloudflare Worker and static asset configuration
-package.json        Wrangler scripts
-README.md           Current project overview and checkpoint
-```
-
-Some documents under `docs/` are historical migration notes. When their checkpoint differs from this README or the current source code, verify the implementation before assuming an endpoint is deployed.
-
-## Current API surface
-
-| Method | Route | Purpose |
+| Method | Route | Safety |
 | --- | --- | --- |
-| GET | `/api/health` | Service health |
+| GET | `/api/health` | Health check |
 | GET | `/api/v1/players/:governorId` | Public governor lookup |
-| GET | `/api/v1/rankings/meta` | Public ranking metadata |
-| GET | `/api/v1/rankings/:kvkId` | Public ranking data |
-| GET | `/api/auth/discord/login` | Begin Discord OAuth2 |
-| GET | `/api/auth/discord/callback` | Complete Discord OAuth2 |
-| GET | `/api/auth/discord/me` | Validate current Leadership session and roles |
-| GET/POST | `/api/auth/discord/logout` | End Leadership session |
-| GET | `/api/v1/leadership/kvks` | Protected, signed, read-only KvK/story catalog |
-| GET | `/api/v1/leadership/comparisons/:kvkId` | Protected, read-only comparison |
-| POST | `/api/v1/leadership/kvks/validate-create` | Create preflight, **NO WRITE** |
-| POST | `/api/v1/leadership/kvks/validate-close` | Close preflight, **NO WRITE** |
+| GET | `/api/v1/rankings/meta` | Ranking metadata |
+| GET | `/api/v1/rankings/:kvkId` | Ranking data |
+| GET | `/api/auth/discord/login` | Begin OAuth |
+| GET | `/api/auth/discord/callback` | OAuth callback |
+| GET | `/api/auth/discord/me` | Session and role validation |
+| GET/POST | `/api/auth/discord/logout` | End session |
+| GET | `/api/v1/leadership/kvks` | Signed protected read |
+| GET | `/api/v1/leadership/comparisons/:kvkId` | Protected comparison |
+| POST | `/api/v1/leadership/kvks/validate-create` | **NO WRITE** |
+| POST | `/api/v1/leadership/kvks/validate-close` | **NO WRITE** |
+| GET | `/api/v1/leadership/kvks/reopen-contract` | Read-only contract |
+| GET | `/api/v1/leadership/kvks/reopen-eligibility?kvkId=...` | Signed **READ_ONLY** |
+| GET | `/api/v1/leadership/kvks/write-readiness` | Read-only gate status |
+| POST | `/api/v1/leadership/kvks/create` | Production gate **OFF** |
+| POST | `/api/v1/leadership/kvks/close` | Production gate **OFF** |
+| POST | `/api/v1/leadership/kvks/reopen` | Production gate **OFF** |
 
-The preflight endpoints return validation results, not authorization to write. There are **no enabled production create/close routes** in this checkpoint.
+## Checkpoint: 2026-10-10
 
-## Local development and deployment
+- **E.1 complete:** RE-OPEN dialog and locked request preview.
+- **E.2 complete:** Signed read-only server eligibility, including specific missing-audit diagnostics.
+- **E.3 complete:** User-confirmed live UI test with **KvK 2 / Season 2 / Historical**. Backend returned **NOT ELIGIBLE · AUDIT_NOT_INITIALIZED**, and RE-OPEN remained locked.
+- **E.4 ongoing:** Security review verified roles, HMAC, separate gates, audit ordering, date guards and locked UI. **Open finding:** After a RE-OPEN POST, malformed or unparseable Apps Script responses must be treated as `REOPEN_STATUS_UNCERTAIN`, not an ordinary bad-response failure. **E.4.1 is not yet deployed.**
 
-Prerequisites: Node.js, npm and access to the relevant Cloudflare account and Google Apps Script deployment.
+The production sheet `_BT_PRODUCTION_WRITE_AUDIT` does not yet exist. Do **not** create a fake CLOSE or audit entry to make an eligibility check pass. A blank audit sheet would not establish a genuine signed CLOSE history.
+
+The Apps Script target URL was verified against Web App **version 93** earlier in the session; subsequent Bridge deployments require newer versions. Do not assume v93 is still current.
+
+**No production writes or artificial test KvKs were performed in these E.1–E.3 checks.** Separate explicit authorization and completed safety review are required before production activation.
+
+## Development and deployment
 
 ```bash
 npm install
@@ -156,57 +148,30 @@ npm run check
 npm run deploy
 ```
 
-`npm run check` runs a Wrangler **dry run**, not an integration or security test. `npm run deploy` changes the Cloudflare deployment and should only be run intentionally. Cloudflare's connected GitHub deployment may deploy after a push, depending on project configuration.
+`npm run check` is a Wrangler **dry run**, not an integration/security test. Cloudflare may auto-deploy after GitHub pushes.
 
-### Environment and secrets
+Relevant configuration: `APPS_SCRIPT_API_URL`, `BT_BRIDGE_SECRET`, Discord OAuth/session secrets and roles, plus independent `BT_PRODUCTION_CREATE_ENABLED`, `BT_PRODUCTION_CLOSE_ENABLED`, `BT_PRODUCTION_REOPEN_ENABLED` gates. Never commit secrets, tokens, cookies, Google credentials or spreadsheet exports to a public repository.
 
-The Worker expects an Apps Script deployment URL and secrets/configuration for Discord OAuth2, sessions and the signed Leadership bridge. Relevant names in the current code include:
+## Data integrity rules
 
-- `APPS_SCRIPT_API_URL`
-- `BT_BRIDGE_SECRET`
-- `DISCORD_CLIENT_SECRET`
-- `SESSION_SECRET`
-- `DISCORD_BOT_TOKEN` (optional fallback for server-side role retrieval)
-- `DISCORD_OFFICER_ROLE_ID` and `DISCORD_DATA_ROLE_ID` (optional role overrides)
+- No synthetic production KvKs, snapshots, closures or silent writes.
+- Preserve KvK IDs, player statistics, closure history and original planned end dates.
+- Read-only endpoints must not create sheets or audit entries.
+- Browser validation is never a substitute for server authorization.
+- All production write gates remain OFF until explicit approval.
+- Preserve historical data and legacy functionality during Cloudflare migration.
 
-Configure sensitive values as **Cloudflare secrets**, never in committed source files. Keep local `.dev.vars` private. Do not upload Google credentials, OAuth tokens, session cookies or spreadsheet exports to this public repository. The checked-in `.dev.vars.example` is a template only; it is not a complete production configuration.
+## Documentation
 
-Discord OAuth callback configuration is tied to the deployed hostname. If the hostname changes, review both Discord application redirect settings and the callback URL in `src/discord-auth.js` before deploying.
+- [Project overview](docs/PROJECT.md)
+- [Data model](docs/DATA-MODEL.md)
+- [Cloudflare API contract](docs/CLOUDFLARE-API-CONTRACT.md)
+- [Cloudflare migration](docs/CLOUDFLARE-MIGRATION.md)
+- [Changelog](docs/CHANGELOG.md)
 
-## Checkpoint: 2026-10-09
-
-**Confirmed in the deployed UI:**
-
-- Discord-protected Leadership access and the independent Leadership cards.
-- Signed KvK/story metadata, including next KvK number **5** / `3903-KVK5`.
-- Successful **NO DATA WRITTEN** preflight for an example story/date selection.
-- **CF-013.6.3:** modifying validated form inputs invalidates the previous result; user-confirmed live behavior.
-- Create/close action buttons remain disabled.
-
-**Engineering work not yet connected to production:** CF-013.6.1 and CF-013.6.2 were isolated offline write-core/mock-bridge experiments. They are **not** deployment packages and do not establish that production writes are secure.
-
-**Next milestone — secure write integration:** design and verify a narrowly scoped Cloudflare → Apps Script write bridge with server-side Discord authorization, explicit confirmation, durable idempotency, locking, replay resistance and audit logging. Test against an **isolated test spreadsheet**, not the production KvK table. Enable production writes only after successful integration tests and explicit approval.
-
-Further planned work includes Discord HeroScrolls scan intake, a controlled Cloudflare scan-import workflow, integrity checks and more complete Leadership audit reporting.
-
-## Data integrity and operational rules
-
-- No production test KvKs, synthetic production snapshots or silent database writes.
-- A planned KvK end date is not an automatic closure trigger; actual closure must be explicit.
-- Read-only analytics must never mutate `KvKs`, `KvK Results`, `Kingdom Snapshots` or `Scan Imports`.
-- Only authenticated, authorized officers should access Leadership data; browser-side controls are not a substitute for backend authorization.
-- Avoid hardcoded story lists, historical IDs and requirement thresholds when authoritative source tables exist.
-- Preserve historical records and the existing Apps Script implementation while Cloudflare migration is incomplete.
-
-## Project documentation
-
-- [`docs/PROJECT.md`](docs/PROJECT.md) — project context
-- [`docs/DATA-MODEL.md`](docs/DATA-MODEL.md) — data model
-- [`docs/CLOUDFLARE-API-CONTRACT.md`](docs/CLOUDFLARE-API-CONTRACT.md) — API notes (may include historical planning)
-- [`docs/CLOUDFLARE-MIGRATION.md`](docs/CLOUDFLARE-MIGRATION.md) — migration history; early sections are not the current status
-- [`docs/CHANGELOG.md`](docs/CHANGELOG.md) — recorded changes
+Older documents may describe historical checkpoints; verify against current source before acting.
 
 ---
 
 **ROK BattleTrack · Kingdom 3903**  
-*Built for clear, traceable KvK performance analysis and responsible Kingdom management.*
+*Clear, traceable KvK performance analysis and responsible Kingdom management.*
