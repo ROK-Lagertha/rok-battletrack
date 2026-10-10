@@ -52,7 +52,8 @@ function btReadReopenEligibility_(kvkId) {
   if (!/^3903-KVK[1-9][0-9]{0,5}$/.test(kvkId)) return deny('INVALID_KVK','Invalid KvK ID.');
   var ss=getDatabase_(), sheet=ss.getSheetByName(BT.SHEETS.KVKS);
   var audit=ss.getSheetByName('_BT_PRODUCTION_WRITE_AUDIT');
-  if(!sheet || !audit) return deny('ELIGIBILITY_DATA_MISSING','Required existing data sheets are missing.');
+  if(!sheet) return deny('KVK_SHEET_MISSING','The existing KvKs sheet was not found. No changes were made.');
+  if(!audit) return deny('AUDIT_NOT_INITIALIZED','The production write audit sheet does not exist yet. Eligibility cannot be confirmed without signed CLOSE history. No changes were made.');
   var values=sheet.getDataRange().getValues();
   if(!values.length) return deny('KVK_SCHEMA_MISMATCH','KvK table is empty.');
   var headers=values[0].map(String), required=['KvK ID','Status','End Scan Date','Actual End Date','Closed At','Closed By'];
