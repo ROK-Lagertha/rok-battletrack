@@ -367,7 +367,16 @@ for(const e of [file,kvk,snap])e.addEventListener('change',display);
  <div class="bt-dlg-grid"><div><label for="btCreateStart">KVK START</label><input type="date" id="btCreateStart"></div><div><label for="btCreateEnd">KVK END (AUTO +50 DAYS · EDITABLE)</label><input type="date" id="btCreateEnd"></div></div>
  <div class="bt-dlg-notice">SEASON NAME<br><strong id="btCreateSeason">Select a story</strong></div>
  <button class="bt-dlg-primary" id="btValidateCreate" type="button">VALIDATE KVK · NO WRITE</button><p id="btCreateValidation" class="bt-validation-message" role="status" aria-live="polite">Choose a story and dates to run a secure preflight check.</p><button class="bt-dlg-primary" id="btSubmitCreate" type="button" disabled>CREATE KVK · LOCKED</button>
- <div class="bt-dlg-footer">PRODUCTION SAFETY · CREATE requires a valid preflight, server-side readiness and explicit confirmation. Currently locked.</div>
+ <div class="bt-dlg-footer">PRODUCTION SAFETY · CREATE requires validated inputs, server-side readiness and exact typed confirmation.</div>
+</dialog>
+<dialog class="bt-leadership-dialog" id="btConfirmCreateDialog" aria-labelledby="btConfirmCreateTitle">
+ <div class="bt-dlg-top"><div><div class="bt-kicker">PRODUCTION DATABASE · FINAL CONFIRMATION</div><h3 id="btConfirmCreateTitle">Confirm New KvK</h3></div><button type="button" class="bt-dlg-x" id="btCancelCreateX" aria-label="Close">✕</button></div>
+ <p>This action creates a real KvK in the live database. It cannot be automatically undone.</p>
+ <div class="bt-dlg-notice" id="btConfirmCreateSummary"></div>
+ <label for="btConfirmCreateText">TYPE EXACTLY: <strong>Create new KVK</strong></label>
+ <input type="text" id="btConfirmCreateText" autocomplete="off" spellcheck="false" autocapitalize="off" placeholder="Create new KVK" aria-describedby="btConfirmCreateHint">
+ <p id="btConfirmCreateHint" class="bt-validation-message" role="status" aria-live="polite">Confirmation is case-sensitive. No data will be written until you confirm.</p>
+ <div class="bt-dlg-grid"><button class="bt-dlg-primary" type="button" id="btCancelCreate">CANCEL</button><button class="bt-dlg-primary" type="button" id="btConfirmCreateSubmit" disabled>CONFIRM & CREATE KVK</button></div>
 </dialog>
 <dialog class="bt-leadership-dialog" id="btCloseKvkDialog" aria-labelledby="btCloseTitle">
  <div class="bt-dlg-top"><div><div class="bt-kicker">KVK MANAGEMENT</div><h3 id="btCloseTitle">Close KvK</h3></div><button type="button" class="bt-dlg-x" data-close="btCloseKvkDialog" aria-label="Close">✕</button></div>
@@ -456,16 +465,48 @@ async function runKvkPreflight(type, payload, outputId){
  }catch(error){if(serial===validationSerial[type]){output.dataset.state='error';output.textContent='Not validated: '+error.message}}
  finally{button.disabled=false}
 }
+// CF-014.2 Phase D: two-step production CREATE with exact typed confirmation.
+const createConfirmDialog=$('btConfirmCreateDialog');
+const createConfirmText=$('btConfirmCreateText');
+const createConfirmSubmit=$('btConfirmCreateSubmit');
+let pendingCreate=null;
+function cancelCreateConfirmation(){
+ pendingCreate=null;
+ createConfirmText.value='';createConfirmSubmit.disabled=true;
+ if(createConfirmDialog.open)createConfirmDialog.close();
+}
+$('btCancelCreate').addEventListener('click',cancelCreateConfirmation);
+$('btCancelCreateX').addEventListener('click',cancelCreateConfirmation);
+createConfirmDialog.addEventListener('close',()=>{pendingCreate=null;createConfirmText.value='';createConfirmSubmit.disabled=true;});
+createConfirmText.addEventListener('input',()=>{
+ createConfirmSubmit.disabled=createConfirmText.value!=='Create new KVK'||!pendingCreate||createState.busy;
+});
 $('btSubmitCreate').addEventListener('click',async()=>{
- const button=$('btSubmitCreate'),output=$('btCreateValidation');
  const payload=createPayload(),fingerprint=createFingerprint(payload);
- if(createState.busy || !createState.ready || createState.validated!==fingerprint){syncCreateButton();return;}
+ if(createState.busy||!createState.ready||createState.validated!==fingerprint){syncCreateButton();return;}
+ // Recheck server-side readiness immediately before displaying confirmation.
+ await checkCreateReadiness();
+ if(!createState.ready||createState.validated!==fingerprint||createFingerprint(createPayload())!==fingerprint)return;
  const expectedId=$('btNextKvkId').textContent.trim();
- if(!window.confirm('CREATE PRODUCTION KVK '+expectedId+'?\n\nStory: '+payload.story+'\nStart: '+payload.startDate+'\nEnd: '+payload.endDate+'\n\nThis writes to the LIVE database and cannot be undone automatically.'))return;
- if(createFingerprint(createPayload())!==fingerprint)return;
- createState.busy=true;syncCreateButton();
+ pendingCreate={payload,fingerprint,expectedId};
+ $('btConfirmCreateSummary').textContent='KvK: '+expectedId+' | Story: '+payload.story+' | Start: '+payload.startDate+' | End: '+payload.endDate;
+ createConfirmText.value='';createConfirmSubmit.disabled=true;
+ createConfirmDialog.showModal();createConfirmText.focus();
+});
+createConfirmSubmit.addEventListener('click',async()=>{
+ if(createConfirmText.value!=='Create new KVK'||!pendingCreate||createState.busy)return;
+ const {payload,fingerprint,expectedId}=pendingCreate;
+ if(createState.validated!==fingerprint||createFingerprint(createPayload())!==fingerprint){cancelCreateConfirmation();return;}
+ createState.busy=true;syncCreateButton();createConfirmSubmit.disabled=true;
  if(!createState.requestId)createState.requestId=crypto.randomUUID();
+ const output=$('btCreateValidation');
  try{
+  // Fail closed on lost readiness or changed form values.
+  const readyResponse=await fetch('/api/v1/leadership/kvks/write-readiness',{credentials:'same-origin',cache:'no-store'});
+  const readyData=await readyResponse.json();
+  if(!readyResponse.ok||readyData.ok!==true||readyData.createEnabled!==true||readyData.writesEnabled!==true||readyData.productionWritesAllowed!==true)
+   throw Error('Production CREATE is not enabled. No KvK was created.');
+  if(createFingerprint(createPayload())!==fingerprint)throw Error('Inputs changed. Please validate again.');
   const response=await fetch('/api/v1/leadership/kvks/create',{
    method:'POST',credentials:'same-origin',cache:'no-store',
    headers:{'content-type':'application/json'},
@@ -473,13 +514,13 @@ $('btSubmitCreate').addEventListener('click',async()=>{
   });
   const data=await response.json();
   if(!response.ok||data.ok!==true){
-   if(response.status===423){createState.ready=false;throw Error('Production CREATE remains locked. No KvK was created.');}
-   throw Error(data.message||'CREATE status not confirmed. Check the database before retrying.');
+   if(response.status===423)throw Error('Production CREATE remains locked on Worker or Apps Script. No KvK was created.');
+   throw Error(data.message||'CREATE status uncertain. Check the database before retrying with the same request ID.');
   }
   output.dataset.state='ok';output.textContent='CREATED · '+String(data.kvk?.kvkId||expectedId)+' · Refresh Leadership to see the new KvK.';
-  createState.validated=null;createState.ready=false;
+  createState.validated=null;createState.ready=false;createState.requestId=null;
  }catch(error){output.dataset.state='error';output.textContent=error.message||'CREATE status uncertain. Check the database before retrying.';}
- finally{createState.busy=false;syncCreateButton();}
+ finally{createState.busy=false;cancelCreateConfirmation();syncCreateButton();}
 });
 $('btValidateCreate').addEventListener('click',()=>{
  const story=$('btCreateStory').value,startDate=$('btCreateStart').value,endDate=$('btCreateEnd').value;

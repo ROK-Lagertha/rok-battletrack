@@ -288,21 +288,18 @@ export default {
         });
         const auth = await discordAuth(sessionCheck, env, "/api/auth/discord/me");
         if (!auth.ok) return apiError(auth.status === 401 ? 401 : 403, "LEADERSHIP_ACCESS_DENIED", "Discord Officer and Data roles are required.");
+        const createReady = String(env.BT_PRODUCTION_CREATE_ENABLED || "") === "YES_PRODUCTION_KVK_CREATE"
+          && String(env.BT_BRIDGE_SECRET || "").length >= 32
+          && !!getAppsScriptApiUrl(env);
         return json({
           ok: true,
-          stage: "CF-014.2-PHASE-A",
-          mode: "READ_ONLY",
-          writesEnabled: false,
-          createEnabled: false,
+          stage: "CF-014.2-PHASE-D",
+          mode: "PRODUCTION_CREATE_GATED",
+          writesEnabled: createReady,
+          createEnabled: createReady,
           closeEnabled: false,
-          productionWritesAllowed: false,
-          nextSteps: [
-            "Configure an isolated test spreadsheet and separate Apps Script deployment",
-            "Implement a dedicated signed write protocol with server-side authorization",
-            "Persist idempotency and audit records under an Apps Script lock",
-            "Test synthetic Create and Close against test data only",
-            "Require explicit production activation approval"
-          ]
+          productionWritesAllowed: createReady,
+          note: createReady ? "Worker CREATE gate enabled; Apps Script independently validates its own gate." : "Production CREATE disabled in Cloudflare configuration."
         });
       } catch (error) {
         console.error("KvK write readiness auth failed", error);
