@@ -13,6 +13,7 @@ const btApi={
     return data;
   },
   playerLookup(governorId){ return this.get('/players/'+encodeURIComponent(governorId)); },
+  kingdomStats(){ return this.get('/kingdom/stats'); },
   rankingMeta(){ return this.get('/rankings/meta'); },
   rankingSeason(kvkId){ return this.get('/rankings/'+encodeURIComponent(kvkId)); }
 };
@@ -63,15 +64,15 @@ function toggleKingdomStats(force){
   panel.scrollIntoView({behavior:'smooth',block:'start'});
   if(kingdomStatsData){ renderKingdomStats(); return; }
   $('kingdomStatsMeta').textContent='Loading Kingdom statistics\u2026';
-  google.script.run
-    .withSuccessHandler(data=>{
+  btApi.kingdomStats()
+    .then(data=>{
       if(!data?.success){ $('kingdomStatsMeta').textContent='Kingdom statistics could not be loaded.'; return; }
       kingdomStatsData=data;
       $('kingdomStatsSeason').innerHTML=(data.seasons||[]).map(s=>`<option value="${esc(s.kvkId)}">${esc(s.seasonName)}</option>`).join('');
+      if(!(data.seasons||[]).length){ $('kingdomStatsMeta').textContent='No Kingdom statistics available yet.'; return; }
       renderKingdomStats();
     })
-    .withFailureHandler(err=>{ $('kingdomStatsMeta').textContent=err?.message||'Kingdom statistics could not be loaded.'; })
-    .getKingdomStatsData();
+    .catch(err=>{ $('kingdomStatsMeta').textContent=err?.message||'Kingdom statistics could not be loaded.'; });
 }
 
 function renderKingdomStats(){

@@ -640,6 +640,11 @@ function apiGet_(e) {
 
     // CF-009: read-only Cloudflare bridge for public Kingdom Rankings.
     // No write/admin operation is exposed through this bridge.
+    // CF-013.12: Public, read-only Kingdom statistics.
+    if (action === 'kingdomStats') {
+      return jsonResponse_(getKingdomStatsData());
+    }
+
     if (action === 'rankingMeta') {
       return jsonResponse_(getKingdomRankingMeta());
     }

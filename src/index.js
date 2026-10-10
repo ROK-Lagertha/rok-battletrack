@@ -108,6 +108,18 @@ async function rankingSeason(request, env, kvkId) {
 }
 
 
+// CF-013.12: Public, read-only Kingdom Stats, served from the existing GAS database.
+async function kingdomStats(request, env) {
+  const cache = caches.default;
+  const key = new Request(new URL("/__cache/api/v1/kingdom/stats", request.url), { method: "GET" });
+  const cached = await cache.match(key);
+  if (cached) return cached;
+  const payload = await fetchAppsScriptJson(env, { action: "kingdomStats" });
+  const response = json(payload, { headers: { "cache-control": "public, max-age=60, s-maxage=300" } });
+  if (payload?.success) await cache.put(key, response.clone());
+  return response;
+}
+
 // CF-010: public, read-only Governor lookup. No shared caching of player profiles.
 async function playerLookup(env, governorId) {
   if (!/^\d{1,20}$/.test(governorId)) {
@@ -402,6 +414,10 @@ export default {
       const playerMatch = url.pathname.match(/^\/api\/v1\/players\/([^/]+)$/);
       if (request.method === "GET" && playerMatch) {
         return await playerLookup(env, decodeURIComponent(playerMatch[1]));
+      }
+
+      if (request.method === "GET" && url.pathname === "/api/v1/kingdom/stats") {
+        return await kingdomStats(request, env);
       }
 
       if (request.method === "GET" && url.pathname === "/api/v1/rankings/meta") {
