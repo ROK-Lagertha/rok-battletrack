@@ -278,9 +278,8 @@ export default {
       }
     }
 
-    // CF-014.4 Phase A: reserved production CLOSE endpoint, deliberately locked.
-    // The endpoint never calls Apps Script, parses a payload or writes data.
-    // Separate backend implementation, tests and approval are required before activation.
+    // CF-014.4 Phase B1: strict CLOSE contract and tags; permanently non-writing.
+    // No upstream write is possible in this phase, irrespective of environment variables.
     if (url.pathname === "/api/v1/leadership/kvks/close") {
       if (request.method !== "POST") return apiError(405, "METHOD_NOT_ALLOWED", "POST required.");
       try {
@@ -294,8 +293,32 @@ export default {
         console.error("KvK CLOSE auth failed", error);
         return apiError(503, "LEADERSHIP_AUTH_UNAVAILABLE", "Authorization unavailable.");
       }
+      // Intentionally refuse all requests before parsing a body or accessing Apps Script.
       return apiError(423, "PRODUCTION_KVK_CLOSE_LOCKED",
-        "Production CLOSE is not implemented or enabled. No KvK was modified.");
+        "CLOSE contract staged; signed Apps Script writer is not yet installed. No KvK was modified.");
+    }
+
+    // Read-only contract metadata for the next CLOSE UI/backend release.
+    if (url.pathname === "/api/v1/leadership/kvks/close-contract") {
+      if (request.method !== "GET") return apiError(405, "METHOD_NOT_ALLOWED", "GET required.");
+      try {
+        const sessionCheck = new Request(new URL("/api/auth/discord/me", request.url), {
+          method: "GET", headers: { cookie: request.headers.get("cookie") || "" }
+        });
+        const auth = await discordAuth(sessionCheck, env, "/api/auth/discord/me");
+        if (!auth.ok) return apiError(auth.status === 401 ? 401 : 403,
+          "LEADERSHIP_ACCESS_DENIED", "Discord Officer and Data roles are required.");
+      } catch (error) {
+        return apiError(503, "LEADERSHIP_AUTH_UNAVAILABLE", "Authorization unavailable.");
+      }
+      return json({ok:true,stage:"CF-014.4-PHASE-B1",mode:"CONTRACT_ONLY",writesEnabled:false,
+        resultOptions:["WIN","LOST","MANUAL"],
+        tagOptions:["WITH_STAR","WITHOUT_STAR","ALLY_SURRENDERED","SURRENDERED"],
+        mutuallyExclusiveTagGroups:[["WITH_STAR","WITHOUT_STAR"]],
+        multipleTagsAllowed:true,notes:{optional:true,maxLength:2000},
+        requiredFields:["kvkId","result","actualEndDate"],
+        preservedFields:["End Scan Date"],
+        note:"Read-only contract. Production CLOSE remains locked; no database changes."});
     }
 
     // CF-013.7: deploy-safe readiness contract for the future KvK write bridge.
@@ -313,8 +336,8 @@ export default {
           && !!getAppsScriptApiUrl(env);
         return json({
           ok: true,
-          stage: "CF-014.2-PHASE-D",
-          mode: "PRODUCTION_CREATE_GATED",
+          stage: "CF-014.4-PHASE-B1",
+          mode: "PRODUCTION_CREATE_GATED_CLOSE_LOCKED",
           writesEnabled: createReady,
           createEnabled: createReady,
           closeEnabled: false,
