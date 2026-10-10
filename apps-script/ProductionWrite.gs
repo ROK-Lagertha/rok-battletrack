@@ -11,6 +11,7 @@ function btProductionWritePost_(e) {
     var actionHint = '';
     try { actionHint = String(JSON.parse(rawBody).action || ''); } catch (_) {}
     if (actionHint === 'CLOSE_KVK') return btProductionClosePost_(e);
+    if (actionHint === 'REOPEN_KVK') return btProductionReopenPost_(e);
     // This is the first guard: do not parse a request or touch the database when locked.
     var props = PropertiesService.getScriptProperties();
     if (props.getProperty('BT_PRODUCTION_CREATE_ENABLED') !== 'YES_PRODUCTION_KVK_CREATE')
@@ -188,5 +189,98 @@ function btProductionClosePost_(e) {
   } catch(error){
     console.error('CF-014.4 production CLOSE error',error);
     return out({ok:false,code:'CLOSE_STATUS_UNCERTAIN',message:'Check audit and KvKs before retrying.'});
+  }
+}
+
+
+/** CF-014.5 Phase B: independently gated, signed, audit-preserving RE-OPEN. */
+function btProductionReopenPost_(e) {
+  function out(v){return ContentService.createTextOutput(JSON.stringify(v)).setMimeType(ContentService.MimeType.JSON);}
+  try {
+    var props=PropertiesService.getScriptProperties();
+    if(props.getProperty('BT_PRODUCTION_REOPEN_ENABLED')!=='YES_PRODUCTION_KVK_REOPEN')
+      return out({ok:false,code:'PRODUCTION_REOPEN_LOCKED'});
+    var secret=String(props.getProperty('BT_BRIDGE_SECRET')||'');
+    if(secret.length<32)return out({ok:false,code:'BRIDGE_NOT_CONFIGURED'});
+    var data=JSON.parse(String(e&&e.postData&&e.postData.contents||'{}'));
+    if(data.bridgeWrite!==1||data.action!=='REOPEN_KVK')return out({ok:false,code:'INVALID_ACTION'});
+    var timestamp=String(data.timestamp||''),nonce=String(data.nonce||''),requestId=String(data.requestId||'');
+    var kvkId=String(data.kvkId||''),reason=String(data.reason||'').trim();
+    var signature=String(data.signature||'').toLowerCase();
+    if(!/^\d{10}$/.test(timestamp)||Math.abs(Math.floor(Date.now()/1000)-Number(timestamp))>90||
+      !/^[a-f0-9-]{36}$/i.test(nonce)||!/^[a-f0-9-]{36}$/i.test(requestId)||
+      !/^3903-KVK[1-9][0-9]{0,5}$/.test(kvkId)||reason.length<10||reason.length>2000||
+      !/^[a-f0-9]{64}$/.test(signature))return out({ok:false,code:'INVALID_REQUEST'});
+    var message=[timestamp,nonce,'REOPEN_KVK',requestId,kvkId,reason].join('\n');
+    var expected=Utilities.computeHmacSha256Signature(message,secret)
+      .map(function(b){return ('0'+(b&255).toString(16)).slice(-2);}).join('');
+    var diff=0;for(var i=0;i<64;i++)diff|=expected.charCodeAt(i)^signature.charCodeAt(i);
+    if(diff)return out({ok:false,code:'INVALID_SIGNATURE'});
+    var lock=LockService.getScriptLock();
+    if(!lock.tryLock(20000))return out({ok:false,code:'REOPEN_BUSY'});
+    try {
+      var ss=getDatabase_(),sheet=ss.getSheetByName(BT.SHEETS.KVKS);
+      if(!sheet)return out({ok:false,code:'KVK_SHEET_MISSING'});
+      var audit=ss.getSheetByName('_BT_PRODUCTION_WRITE_AUDIT');
+      if(!audit){audit=ss.insertSheet('_BT_PRODUCTION_WRITE_AUDIT');
+        audit.appendRow(['Timestamp','Request ID','Action','Payload Hash','Status','KvK ID','Message']);}
+      var payloadHash=Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,[kvkId,reason].join('\n'))
+        .map(function(b){return ('0'+(b&255).toString(16)).slice(-2);}).join('');
+      var entries=audit.getLastRow()>1?audit.getRange(2,2,audit.getLastRow()-1,5).getValues():[];
+      for(var j=0;j<entries.length;j++){
+        if(String(entries[j][0])!==requestId)continue;
+        if(String(entries[j][1])!=='REOPEN_KVK'||String(entries[j][2])!==payloadHash)
+          return out({ok:false,code:'REQUEST_ID_CONFLICT'});
+        if(String(entries[j][3])==='COMPLETED')
+          return out({ok:true,duplicate:true,kvk:{id:kvkId,status:'Active'}});
+        return out({ok:false,code:'REOPEN_STATUS_UNCERTAIN',message:'Review production audit before retrying.'});
+      }
+      var values=sheet.getDataRange().getValues(),headers=values[0].map(String);
+      var idCol=headers.indexOf('KvK ID'),statusCol=headers.indexOf('Status');
+      var endCol=headers.indexOf('End Scan Date'),actualCol=headers.indexOf('Actual End Date');
+      if([idCol,statusCol,endCol,actualCol].some(function(x){return x<0;}))
+        return out({ok:false,code:'KVK_SCHEMA_MISMATCH'});
+      var index=-1;
+      for(var k=1;k<values.length;k++)if(String(values[k][idCol]).trim()===kvkId){index=k;break;}
+      if(index<1)return out({ok:false,code:'KVK_NOT_FOUND'});
+      if(String(values[index][statusCol]).trim().toLowerCase()!=='closed')
+        return out({ok:false,code:'KVK_NOT_CLOSED'});
+      function iso(v){
+        if(Object.prototype.toString.call(v)==='[object Date]'&&!isNaN(v))
+          return Utilities.formatDate(v,'Europe/Berlin','yyyy-MM-dd');
+        return String(v||'').slice(0,10);
+      }
+      var planned=iso(values[index][endCol]),actual=iso(values[index][actualCol]);
+      var today=Utilities.formatDate(new Date(),'Europe/Berlin','yyyy-MM-dd');
+      function valid(v){var d=new Date(v+'T00:00:00Z');
+        return /^\d{4}-\d{2}-\d{2}$/.test(v)&&!isNaN(d.getTime())&&Utilities.formatDate(d,'UTC','yyyy-MM-dd')===v;}
+      if(!valid(planned)||!valid(actual))return out({ok:false,code:'END_DATES_MISSING'});
+      if(actual>=planned)return out({ok:false,code:'NOT_EARLY_CLOSURE'});
+      if(today>=planned)return out({ok:false,code:'PLANNED_END_REACHED'});
+      // Snapshot closure details BEFORE clearing them, so past leadership decisions remain recoverable.
+      var fields=['Result','Closure Tags','Closure Notes','Closed At','Closed By'];
+      var snapshot={kvkId:kvkId,plannedEndDate:planned,actualEndDate:actual,
+        reason:reason,reopenedAt:new Date().toISOString(),requestId:requestId};
+      fields.forEach(function(field){var n=headers.indexOf(field);
+        snapshot[field]=n>=0?String(values[index][n]||''):'';});
+      var history=ss.getSheetByName('_BT_KVK_CLOSURE_HISTORY');
+      if(!history){history=ss.insertSheet('_BT_KVK_CLOSURE_HISTORY');
+        history.appendRow(['Timestamp','Request ID','KvK ID','Action','Snapshot JSON']);}
+      var auditRow=audit.getLastRow()+1;
+      audit.appendRow([new Date(),requestId,'REOPEN_KVK',payloadHash,'PENDING',kvkId,'']);
+      SpreadsheetApp.flush();
+      history.appendRow([new Date(),requestId,kvkId,'REOPEN_KVK',JSON.stringify(snapshot)]);
+      SpreadsheetApp.flush();
+      // Clear only the current closure metadata. Never change the planned end date or player data.
+      ['Actual End Date'].concat(fields).forEach(function(field){var n=headers.indexOf(field);
+        if(n>=0)sheet.getRange(index+1,n+1).clearContent();});
+      sheet.getRange(index+1,statusCol+1).setValue('Active');
+      SpreadsheetApp.flush();
+      audit.getRange(auditRow,5,1,3).setValues([['COMPLETED',kvkId,'REOPEN_KVK; history snapshot saved; reason='+reason]]);
+      return out({ok:true,duplicate:false,kvk:{id:kvkId,status:'Active',plannedEndDate:planned}});
+    }finally{lock.releaseLock();}
+  }catch(error){
+    console.error('CF-014.5 REOPEN error',error);
+    return out({ok:false,code:'REOPEN_STATUS_UNCERTAIN',message:'Check audit and KvKs before retrying.'});
   }
 }

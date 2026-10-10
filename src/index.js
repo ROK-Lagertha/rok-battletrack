@@ -377,7 +377,7 @@ export default {
         return apiError(503, "LEADERSHIP_AUTH_UNAVAILABLE", "Authorization unavailable.");
       }
       return json({
-        ok:true,stage:"CF-014.5-PHASE-A",mode:"REOPEN_CONTRACT_ONLY",writesEnabled:false,
+        ok:true,stage:"CF-014.5-PHASE-B",mode:"SIGNED_REOPEN_GATED",writesEnabled:false,
         reopenEnabled:false,
         eligibility:{
           statusMustBe:"Closed",
@@ -391,7 +391,7 @@ export default {
         },
         requiredFields:["kvkId","reason"],
         futureConfirmation:"Reopen this KVK",
-        note:"Read-only contract. No RE-OPEN write endpoint exists; all production RE-OPEN operations remain unavailable."
+        note:"Signed RE-OPEN backend installed but separately gated OFF by default. No writes through this contract."
       });
     }
 
@@ -404,7 +404,40 @@ export default {
         const auth=await discordAuth(sessionCheck,env,"/api/auth/discord/me");
         if(!auth.ok)return apiError(auth.status===401?401:403,"LEADERSHIP_ACCESS_DENIED","Discord Officer and Data roles are required.");
       } catch (_) {return apiError(503,"LEADERSHIP_AUTH_UNAVAILABLE","Authorization unavailable.");}
-      return apiError(423,"PRODUCTION_KVK_REOPEN_LOCKED","RE-OPEN is not implemented or enabled. No KvK was modified.");
+      if (String(env.BT_PRODUCTION_REOPEN_ENABLED || "") !== "YES_PRODUCTION_KVK_REOPEN")
+        return apiError(423,"PRODUCTION_KVK_REOPEN_LOCKED","RE-OPEN is disabled. No KvK was modified.");
+      if (request.headers.get("origin") !== url.origin)
+        return apiError(403,"ORIGIN_DENIED","Same-origin request required.");
+      if (!(request.headers.get("content-type") || "").toLowerCase().startsWith("application/json"))
+        return apiError(415,"JSON_REQUIRED","JSON required.");
+      try {
+        const payload=await request.json();
+        const kvkId=String(payload?.kvkId || ""), reason=String(payload?.reason || "").trim();
+        const requestId=String(payload?.requestId || "");
+        if (payload?.confirm !== "CONFIRM_PRODUCTION_KVK_REOPEN" ||
+            !/^3903-KVK[1-9][0-9]{0,5}$/.test(kvkId) || reason.length < 10 || reason.length > 2000 ||
+            !/^[a-f0-9-]{36}$/i.test(requestId))
+          return apiError(400,"INVALID_REOPEN_REQUEST","Valid KvK ID, reason (10–2000 chars), request ID and explicit confirmation required.");
+        const secret=String(env.BT_BRIDGE_SECRET || ""), base=getAppsScriptApiUrl(env);
+        if (secret.length < 32 || !base) return apiError(503,"REOPEN_BRIDGE_UNAVAILABLE","Write bridge not configured.");
+        const timestamp=String(Math.floor(Date.now()/1000)),nonce=crypto.randomUUID();
+        const message=[timestamp,nonce,"REOPEN_KVK",requestId,kvkId,reason].join("\n");
+        const key=await crypto.subtle.importKey("raw",new TextEncoder().encode(secret),
+          {name:"HMAC",hash:"SHA-256"},false,["sign"]);
+        const signature=Array.from(new Uint8Array(await crypto.subtle.sign("HMAC",key,new TextEncoder().encode(message))))
+          .map(b=>b.toString(16).padStart(2,"0")).join("");
+        const upstream=await fetch(base,{method:"POST",headers:{"content-type":"application/json"},
+          redirect:"follow",signal:AbortSignal.timeout(15000),
+          body:JSON.stringify({bridgeWrite:1,action:"REOPEN_KVK",timestamp,nonce,requestId,kvkId,reason,signature})});
+        let reply;try{reply=await upstream.json();}catch(_){return apiError(502,"REOPEN_BRIDGE_BAD_RESPONSE","Unexpected upstream response.");}
+        if(!upstream.ok || !reply?.ok)
+          return apiError(reply?.code === "PRODUCTION_REOPEN_LOCKED" ? 423 : 409,
+            reply?.code || "REOPEN_REJECTED",reply?.message || "KvK was not reopened.");
+        return json({ok:true,stage:"CF-014.5-PHASE-B",kvk:reply.kvk,duplicate:!!reply.duplicate,requestId});
+      }catch(error){
+        console.error("RE-OPEN bridge status uncertain",String(error?.name || "Error"));
+        return apiError(503,"REOPEN_STATUS_UNCERTAIN","Check production audit before retrying with the same request ID.");
+      }
     }
 
     // CF-013.7: deploy-safe readiness contract for the future KvK write bridge.
@@ -427,6 +460,8 @@ export default {
           writesEnabled: createReady,
           createEnabled: createReady,
           closeEnabled: String(env.BT_PRODUCTION_CLOSE_ENABLED || "") === "YES_PRODUCTION_KVK_CLOSE"
+            && String(env.BT_BRIDGE_SECRET || "").length >= 32 && !!getAppsScriptApiUrl(env),
+          reopenEnabled: String(env.BT_PRODUCTION_REOPEN_ENABLED || "") === "YES_PRODUCTION_KVK_REOPEN"
             && String(env.BT_BRIDGE_SECRET || "").length >= 32 && !!getAppsScriptApiUrl(env),
           productionWritesAllowed: createReady,
           note: createReady ? "Worker CREATE gate enabled; Apps Script independently validates its own gate." : "Production CREATE disabled in Cloudflare configuration."
