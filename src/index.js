@@ -62,7 +62,7 @@ async function leadershipManagement(env, action = "kvkManagement", kvkId = "") {
   if (!base) throw new Error("Apps Script URL missing");
   const timestamp = String(Math.floor(Date.now() / 1000));
   const nonce = crypto.randomUUID();
-  const message = `${timestamp}\n${nonce}\n${action}${action === "kvkComparison" ? `\n${kvkId}` : ""}`;
+  const message = `${timestamp}\n${nonce}\n${action}${(action === "kvkComparison" || action === "reopenEligibility") ? `\n${kvkId}` : ""}`;
   const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
   const signature = Array.from(new Uint8Array(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(message)))).map(x => x.toString(16).padStart(2,"0")).join("");
   const target = new URL(base);
@@ -393,6 +393,28 @@ export default {
         futureConfirmation:"Reopen this KVK",
         note:"Signed RE-OPEN backend installed but separately gated OFF by default. No writes through this contract."
       });
+    }
+
+    // CF-014.5 E.2: signed, authenticated, strictly read-only eligibility check.
+    if (url.pathname === "/api/v1/leadership/kvks/reopen-eligibility") {
+      if (request.method !== "GET") return apiError(405,"METHOD_NOT_ALLOWED","GET required.");
+      try {
+        const sessionCheck = new Request(new URL("/api/auth/discord/me",request.url),
+          {method:"GET",headers:{cookie:request.headers.get("cookie")||""}});
+        const auth = await discordAuth(sessionCheck,env,"/api/auth/discord/me");
+        if (!auth.ok) return apiError(auth.status===401?401:403,
+          "LEADERSHIP_ACCESS_DENIED","Discord Officer and Data roles are required.");
+      } catch (_) {return apiError(503,"LEADERSHIP_AUTH_UNAVAILABLE","Authorization unavailable.");}
+      const kvkId=url.searchParams.get("kvkId")||"";
+      if (!/^3903-KVK[1-9][0-9]{0,5}$/.test(kvkId))
+        return apiError(400,"INVALID_KVK","Valid KvK ID required.");
+      try {
+        const result=await leadershipManagement(env,"reopenEligibility",kvkId);
+        if(result?.mode!=="READ_ONLY"||result?.writesEnabled!==false||result?.kvkId!==kvkId||
+          typeof result?.eligible!=="boolean")
+          return apiError(502,"ELIGIBILITY_BAD_RESPONSE","Unexpected eligibility response.");
+        return json(result);
+      } catch (_) {return apiError(503,"ELIGIBILITY_UNAVAILABLE","Eligibility check unavailable.");}
     }
 
     if (url.pathname === "/api/v1/leadership/kvks/reopen") {
