@@ -14,11 +14,22 @@
     .discord-admin-copy strong{font-size:11px;font-weight:800;letter-spacing:.65px;color:#f5e5c4}
     .discord-admin-copy small{font-size:10px;color:#c7a45d;font-weight:600}
     @media(max-width:410px){.discord-admin-login{gap:6px;padding:5px 8px}.discord-admin-icon{width:21px}.discord-admin-copy strong{font-size:10px}}
+    /* CF-NAV-3903: Home link back to the Kingdom 3903 Command Center. */
+    .kingdom3903-home-link{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:38px;padding:7px 12px;margin-right:auto;border:1px solid rgba(240,165,27,.48);border-radius:9px;background:linear-gradient(145deg,#151b24,#0c121c);color:#e9bb57;text-decoration:none;box-shadow:0 2px 10px #9d76291a;font-family:system-ui,-apple-system,Segoe UI,sans-serif;font-size:10px;font-weight:800;letter-spacing:.07em;white-space:nowrap;line-height:1.2;transition:filter .18s ease,border-color .18s ease}
+    .kingdom3903-home-link:hover{filter:brightness(1.12);border-color:#d4a84a}
+    .kingdom3903-home-link:focus-visible{outline:2px solid #f1cf78;outline-offset:3px}
+    .kingdom3903-home-link svg{flex:none}
+    @media(max-width:440px){.kingdom3903-home-link{gap:5px;padding:6px 8px;font-size:9px;letter-spacing:0}.kingdom3903-home-link svg{width:13px;height:13px}}
+    @media(max-width:355px){.kingdom3903-home-link span{font-size:0}.kingdom3903-home-link span:after{content:"3903";font-size:10px}}
   </style>
 </head>
 <body>
   <div class="page-shell">
     <nav class="battletrack-menu" aria-label="BattleTrack navigation">
+      <a href="https://kingdom3903.com/" class="kingdom3903-home-link" title="Back to Kingdom 3903 Command Center" aria-label="Back to Kingdom 3903 home page">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>
+        <span>BACK TO 3903</span>
+      </a>
       <a href="/leadership" class="discord-admin-login" title="Sign in to BattleTrack Leadership with Discord" aria-label="Admin login via Discord">
         <svg class="discord-admin-icon" viewBox="0 0 127.14 96.36" aria-hidden="true" focusable="false"><path fill="currentColor" d="M104.4 8.14A102.2 102.2 0 0 0 79.66 0a72.2 72.2 0 0 0-3.16 6.52 94.2 94.2 0 0 0-28.86 0A72.4 72.4 0 0 0 44.48 0a102.2 102.2 0 0 0-24.74 8.14C4.1 31.5-.14 54.28 1.98 76.74a102.9 102.9 0 0 0 30.36 15.34 74.9 74.9 0 0 0 6.5-10.54 66.7 66.7 0 0 1-10.24-4.96c.86-.63 1.7-1.28 2.52-1.94 19.74 9.28 41.16 9.28 60.66 0 .82.66 1.66 1.31 2.52 1.94a66.7 66.7 0 0 1-10.24 4.96 74.9 74.9 0 0 0 6.5 10.54 102.9 102.9 0 0 0 30.36-15.34c2.5-26.03-4.28-48.6-17.76-68.6ZM42.45 65.2c-5.93 0-10.8-5.46-10.8-12.18s4.76-12.2 10.8-12.2c6.1 0 10.92 5.51 10.81 12.2 0 6.72-4.76 12.18-10.81 12.18Zm42.24 0c-5.93 0-10.8-5.46-10.8-12.18s4.76-12.2 10.8-12.2c6.1 0 10.92 5.51 10.81 12.2 0 6.72-4.76 12.18-10.81 12.18Z"/></svg>
         <span class="discord-admin-copy"><strong>ADMIN LOGIN</strong><small>via Discord</small></span>
